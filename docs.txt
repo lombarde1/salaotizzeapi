@@ -1,0 +1,1008 @@
+# Documentação da API SalaoPro
+
+## Dashboard
+
+### Obter Resumo do Dashboard
+- **URL**: `/dashboard/summary`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "totalAppointments": 150,
+        "totalClients": 80,
+        "totalRevenue": 15000.00,
+        "upcomingAppointments": 5
+    }
+}
+```
+
+### Obter Dados do Gráfico Mensal
+- **URL**: `/dashboard/charts/monthly`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "labels": ["Jan", "Fev", "Mar"],
+        "revenue": [5000.00, 6000.00, 7000.00],
+        "appointments": [50, 60, 70]
+    }
+}
+```
+
+### Obter Dados do Gráfico Diário
+- **URL**: `/dashboard/charts/daily`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "labels": ["Seg", "Ter", "Qua", "Qui", "Sex"],
+        "appointments": [10, 12, 8, 15, 11]
+    }
+}
+```
+
+## Relatórios
+
+### Resumo Financeiro
+- **URL**: `/reports/financial/summary`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "totalRevenue": 25000.00,
+        "expenses": 8000.00,
+        "profit": 17000.00,
+        "revenueByService": [
+            {
+                "service": "Corte de Cabelo",
+                "revenue": 12000.00
+            }
+        ]
+    }
+}
+```
+
+### Desempenho dos Profissionais
+- **URL**: `/reports/professionals/performance`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "professionals": [
+            {
+                "name": "Maria Silva",
+                "totalAppointments": 85,
+                "revenue": 8500.00,
+                "rating": 4.8
+            }
+        ]
+    }
+}
+```
+
+### Top Clientes
+- **URL**: `/reports/clients/top`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "clients": [
+            {
+                "name": "João Santos",
+                "totalSpent": 2500.00,
+                "visitCount": 12,
+                "lastVisit": "2024-03-15T10:00:00Z"
+            }
+        ]
+    }
+}
+```
+
+### Serviços Populares
+- **URL**: `/reports/services/popular`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "services": [
+            {
+                "name": "Corte de Cabelo",
+                "bookingCount": 150,
+                "revenue": 7500.00,
+                "averageRating": 4.9
+            }
+        ]
+    }
+}
+```
+
+## Autenticação
+
+### Registrar Novo Usuário
+- **URL**: `/register`
+- **Método**: POST
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Nome do Usuário",
+    "email": "usuario@exemplo.com",
+    "password": "senha123",
+    "role": "owner",
+    "phone": "11999999999",
+    "companyName": "Salão Exemplo"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "user": {
+            "name": "Nome do Usuário",
+            "email": "usuario@exemplo.com",
+            "role": "owner",
+            "status": "active",
+            "plan": "trial"
+        },
+        "token": "jwt_token"
+    }
+}
+```
+
+### Login
+- **URL**: `/login`
+- **Método**: POST
+- **Corpo da Requisição**:
+```json
+{
+    "email": "usuario@exemplo.com",
+    "password": "senha123"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "user": {
+            "name": "Nome do Usuário",
+            "email": "usuario@exemplo.com",
+            "role": "owner",
+            "status": "active"
+        },
+        "token": "jwt_token"
+    }
+}
+```
+
+### Obter Usuário Atual
+- **URL**: `/me`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "user": {
+            "name": "Nome do Usuário",
+            "email": "usuario@exemplo.com",
+            "role": "owner",
+            "status": "active"
+        }
+    }
+}
+```
+
+### Atualizar Usuário
+- **URL**: `/update`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Novo Nome",
+    "phone": "11988888888",
+    "companyName": "Novo Nome do Salão"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "user": {
+            "name": "Novo Nome",
+            "email": "usuario@exemplo.com",
+            "phone": "11988888888",
+            "companyName": "Novo Nome do Salão"
+        }
+    }
+}
+```
+
+### Redefinir Senha
+- **URL**: `/reset-password`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "currentPassword": "senha_atual",
+    "newPassword": "nova_senha"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "message": "Senha atualizada com sucesso"
+}
+```
+
+## Clientes
+
+### Criar Novo Cliente
+- **URL**: `/clients`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Nome do Cliente",
+    "phone": "11999999999",
+    "email": "cliente@exemplo.com",
+    "cpf": "12345678900",
+    "city": "São Paulo",
+    "description": "Observações sobre o cliente"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "client": {
+            "name": "Nome do Cliente",
+            "phone": "11999999999",
+            "email": "cliente@exemplo.com",
+            "status": "active"
+        }
+    }
+}
+```
+
+### Listar Clientes
+- **URL**: `/clients`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `search`: Termo de busca (opcional)
+  - `status`: Status do cliente (opcional)
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "clients": [
+            {
+                "name": "Nome do Cliente",
+                "phone": "11999999999",
+                "email": "cliente@exemplo.com",
+                "status": "active"
+            }
+        ]
+    }
+}
+```
+
+### Busca Rápida de Clientes
+- **URL**: `/clients/search`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `q`: Termo de busca
+- **Resposta de Sucesso**:
+  - **Código**: 200
+
+### Obter Cliente por ID
+- **URL**: `/clients/:id`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+
+### Atualizar Cliente
+- **URL**: `/clients/:id`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Novo Nome do Cliente",
+    "phone": "11988888888",
+    "email": "novoemail@exemplo.com"
+}
+```
+
+### Desativar Cliente
+- **URL**: `/clients/:id`
+- **Método**: DELETE
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+
+## Profissionais
+
+### Criar Novo Profissional
+- **URL**: `/professionals`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Nome do Profissional",
+    "phone": "11999999999",
+    "email": "profissional@exemplo.com",
+    "role": "Cabeleireiro",
+    "commissionType": "percentage",
+    "commissionValue": 30
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+
+### Listar Profissionais
+- **URL**: `/professionals`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `status`: Status do profissional (opcional)
+  - `role`: Função do profissional (opcional)
+  - `search`: Termo de busca (opcional)
+  - `sortBy`: Campo e direção de ordenação (opcional)
+
+### Obter Profissional por ID
+- **URL**: `/professionals/:id`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+
+### Atualizar Profissional
+- **URL**: `/professionals/:id`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Novo Nome do Profissional",
+    "phone": "11988888888",
+    "email": "novoemail@exemplo.com",
+    "role": "Manicure"
+}
+```
+
+### Atualizar Comissão
+- **URL**: `/professionals/:id/commission`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "commissionType": "fixed",
+    "commissionValue": 50
+}
+```
+
+### Criar Conta de Acesso
+- **URL**: `/professionals/:id/account`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "email": "profissional@exemplo.com",
+    "password": "senha123"
+}
+```
+
+## Serviços
+
+### Criar Novo Serviço
+- **URL**: `/services`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Nome do Serviço",
+    "description": "Descrição do serviço",
+    "price": 100.00,
+    "duration": 60,
+    "category": "Cabelo",
+    "commissionType": "default",
+    "commissionValue": 30,
+    "priceRange": {
+        "min": 80.00,
+        "max": 120.00
+    }
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+- **Possíveis Erros**:
+  - `Nome é obrigatório`
+  - `Preço deve ser um número positivo`
+  - `Duração deve ser um número positivo`
+  - `Tipo de comissão inválido`
+  - `Valor da comissão deve ser positivo`
+  - `Já existe um serviço com este nome`
+  - `Preço deve estar dentro da faixa definida`
+  - `Preço máximo deve ser maior que o preço mínimo`
+
+### Listar Serviços
+- **URL**: `/services`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `category`: Categoria do serviço (opcional)
+  - `status`: Status do serviço (opcional)
+  - `sortBy`: Campo para ordenação (opcional)
+  - `order`: Direção da ordenação (asc/desc) (opcional)
+  - `page`: Número da página (opcional, padrão: 1)
+  - `limit`: Itens por página (opcional, padrão: 10)
+
+### Obter Serviço por ID
+- **URL**: `/services/:id`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Possíveis Erros**:
+  - `Serviço não encontrado`
+
+### Atualizar Serviço
+- **URL**: `/services/:id`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Novo Nome do Serviço",
+    "price": 120.00,
+    "duration": 90,
+    "category": "Cabelo",
+    "commissionType": "custom",
+    "commissionValue": 40
+}
+```
+- **Possíveis Erros**:
+  - `Atualizações inválidas`
+  - `Serviço não encontrado`
+  - `Já existe um serviço com este nome`
+
+### Desativar Serviço
+- **URL**: `/services/:id`
+- **Método**: DELETE
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Possíveis Erros**:
+  - `Serviço não encontrado`
+
+## Agendamentos
+
+### Criar Novo Agendamento
+- **URL**: `/appointments`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "clientId": "id_do_cliente",
+    "professionalId": "id_do_profissional",
+    "serviceId": "id_do_servico",
+    "date": "2024-01-01T10:00:00Z",
+    "notes": "Observações do agendamento"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "appointment": {
+            "clientId": "id_do_cliente",
+            "professionalId": "id_do_profissional",
+            "serviceId": "id_do_servico",
+            "date": "2024-01-01T10:00:00Z",
+            "duration": 60,
+            "status": "scheduled",
+            "notes": "Observações do agendamento"
+        }
+    }
+}
+```
+- **Possíveis Erros**:
+  - `Client ID is required`
+  - `Professional ID is required`
+  - `Service ID is required`
+  - `Valid date is required`
+  - `Professional does not provide this service`
+  - `Professional schedule not configured`
+  - `Professional not working on this day`
+  - `Time outside working hours`
+  - `Time conflicts with break time`
+  - `Professional is off on this date`
+  - `Time slot conflicts with existing appointment`
+
+### Listar Agendamentos
+- **URL**: `/appointments`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `status`: Status do agendamento (opcional)
+  - `startDate`: Data inicial (opcional)
+  - `endDate`: Data final (opcional)
+  - `clientId`: ID do cliente (opcional)
+  - `professionalId`: ID do profissional (opcional)
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "appointments": [
+            {
+                "clientId": {
+                    "name": "Nome do Cliente",
+                    "phone": "11999999999",
+                    "email": "cliente@exemplo.com"
+                },
+                "professionalId": {
+                    "name": "Nome do Profissional"
+                },
+                "serviceId": {
+                    "name": "Nome do Serviço",
+                    "duration": 60,
+                    "price": 100.00
+                },
+                "date": "2024-01-01T10:00:00Z",
+                "status": "scheduled"
+            }
+        ]
+    }
+}
+```
+
+### Atualizar Status do Agendamento
+- **URL**: `/appointments/:id/status`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "status": "confirmed"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "appointment": {
+            "status": "confirmed"
+        }
+    }
+}
+```
+- **Possíveis Erros**:
+  - `Invalid status`
+  - `Invalid status transition`
+  - `Appointment not found`
+
+### Verificar Horários Disponíveis
+- **URL**: `/appointments/availability`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `professionalId`: ID do profissional (obrigatório)
+  - `date`: Data para verificação (obrigatório, formato ISO8601)
+  - `serviceId`: ID do serviço (obrigatório)
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "slots": [
+            "2024-01-01T09:00:00Z",
+            "2024-01-01T10:00:00Z",
+            "2024-01-01T11:00:00Z"
+        ]
+    }
+}
+```
+- **Possíveis Erros**:
+  - `Professional ID is required`
+  - `Valid date is required`
+  - `Service ID is required`
+  - `Professional schedule not configured`
+  - `Service not found`
+
+## Produtos
+
+### Criar Novo Produto
+- **URL**: `/products`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Nome do Produto",
+    "description": "Descrição do produto",
+    "purchasePrice": 50.00,
+    "salePrice": 100.00,
+    "minStock": 5,
+    "brand": "Marca",
+    "category": "Categoria",
+    "barcode": "789123456",
+    "commissionType": "percentage",
+    "commissionValue": 10
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+- **Possíveis Erros**:
+  - `Nome é obrigatório`
+  - `Preço de venda deve ser um número positivo`
+  - `Preço de compra deve ser um número positivo`
+  - `Estoque mínimo deve ser um número positivo`
+  - `Tipo de comissão inválido`
+  - `Valor da comissão deve ser positivo`
+  - `Já existe um produto com este nome`
+  - `Preço de venda deve ser maior ou igual ao preço de compra`
+
+### Listar Produtos
+- **URL**: `/products`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `category`: Categoria do produto (opcional)
+  - `brand`: Marca do produto (opcional)
+  - `status`: Status do produto (opcional)
+  - `sortBy`: Campo para ordenação (opcional)
+  - `order`: Direção da ordenação (asc/desc) (opcional)
+  - `page`: Número da página (opcional, padrão: 1)
+  - `limit`: Itens por página (opcional, padrão: 10)
+- **Resposta de Sucesso**:
+  - **Código**: 200
+
+### Obter Produto por ID
+- **URL**: `/products/:id`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Possíveis Erros**:
+  - `Produto não encontrado`
+
+### Atualizar Produto
+- **URL**: `/products/:id`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "name": "Novo Nome do Produto",
+    "description": "Nova descrição",
+    "purchasePrice": 60.00,
+    "salePrice": 120.00,
+    "minStock": 10,
+    "brand": "Nova Marca",
+    "category": "Nova Categoria",
+    "commissionType": "fixed",
+    "commissionValue": 15
+}
+```
+- **Possíveis Erros**:
+  - `Atualizações inválidas`
+  - `Produto não encontrado`
+  - `Já existe um produto com este nome`
+  - `Preço de venda deve ser maior ou igual ao preço de compra`
+
+### Atualizar Estoque
+- **URL**: `/products/:id/stock`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "quantity": 10,
+    "type": "in",
+    "reason": "Compra de fornecedor"
+}
+```
+- **Possíveis Erros**:
+  - `Quantidade deve ser um número positivo`
+  - `Tipo de operação inválido`
+  - `Motivo é obrigatório`
+  - `Produto não encontrado`
+  - `Operação resultaria em estoque negativo`
+
+### Desativar Produto
+- **URL**: `/products/:id`
+- **Método**: DELETE
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Possíveis Erros**:
+  - `Produto não encontrado`
+
+### Listar Produtos com Estoque Baixo
+- **URL**: `/products/low-stock`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Resposta de Sucesso**:
+  - **Código**: 200
+  - **Exemplo**:
+```json
+{
+    "status": "success",
+    "data": {
+        "products": [
+            {
+                "name": "Nome do Produto",
+                "stock": 3,
+                "minStock": 5,
+                "status": "active"
+            }
+        ]
+    }
+}
+```
+
+## Transações Financeiras
+
+### Criar Nova Transação
+- **URL**: `/transactions`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "type": "income",
+    "category": "service",
+    "amount": 100.00,
+    "description": "Pagamento de serviço",
+    "paymentMethod": "credit_card"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+- **Possíveis Erros**:
+  - `Tipo de transação inválido`
+  - `Categoria é obrigatória`
+  - `Valor deve ser um número positivo`
+  - `Método de pagamento inválido`
+
+### Registrar Venda de Serviço
+- **URL**: `/transactions/service`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "serviceId": "id_do_servico",
+    "professionalId": "id_do_profissional",
+    "clientId": "id_do_cliente",
+    "amount": 150.00,
+    "paymentMethod": "credit_card",
+    "date": "2024-01-20T10:00:00Z"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+
+### Registrar Venda de Produto
+- **URL**: `/transactions/product`
+- **Método**: POST
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "productId": "id_do_produto",
+    "quantity": 2,
+    "clientId": "id_do_cliente",
+    "paymentMethod": "cash"
+}
+```
+- **Resposta de Sucesso**:
+  - **Código**: 201
+- **Possíveis Erros**:
+  - `Produto não encontrado`
+  - `Estoque insuficiente`
+
+### Listar Transações
+- **URL**: `/transactions`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `type`: Tipo da transação (income/expense)
+  - `category`: Categoria
+  - `status`: Status da transação
+  - `startDate`: Data inicial
+  - `endDate`: Data final
+  - `page`: Número da página
+  - `limit`: Itens por página
+  - `sortBy`: Campo para ordenação
+  - `order`: Direção da ordenação (asc/desc)
+
+### Resumo Financeiro
+- **URL**: `/transactions/summary`
+- **Método**: GET
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Parâmetros de Query**:
+  - `startDate`: Data inicial (obrigatório)
+  - `endDate`: Data final (obrigatório)
+
+### Atualizar Status da Transação
+- **URL**: `/transactions/:id/status`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "status": "paid"
+}
+```
+- **Possíveis Erros**:
+  - `Status inválido`
+  - `Transação não encontrada`
+
+### Pagar Comissão
+- **URL**: `/transactions/:id/commission/pay`
+- **Método**: PUT
+- **Autenticação**: Requerida
+- **Headers**:
+  - `Authorization: Bearer jwt_token`
+- **Corpo da Requisição**:
+```json
+{
+    "paymentMethod": "pix"
+}
+```
+- **Possíveis Erros**:
+  - `Transação não encontrada ou comissão já paga`
+  - `Método de pagamento inválido`
