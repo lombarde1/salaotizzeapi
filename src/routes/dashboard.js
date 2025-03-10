@@ -1,10 +1,16 @@
+// src/routes/dashboard.js
+
 const express = require('express');
 const auth = require('../middleware/auth');
-const { getDashboardSummary, getMonthlyChartData, getDailyChartData } = require('../controllers/dashboard');
+const { 
+  getDashboardSummary, 
+  getMonthlyChartData, 
+  getDailyChartData 
+} = require('../controllers/dashboard');
 
 const router = express.Router();
 
-// Get dashboard summary
+// Get dashboard summary with filtering options
 router.get('/summary', auth, getDashboardSummary);
 
 // Get monthly chart data
