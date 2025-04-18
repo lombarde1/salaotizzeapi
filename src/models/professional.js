@@ -114,36 +114,9 @@ const professionalSchema = new mongoose.Schema({
                 : 'Commission value must be non-negative'
         }
     },
+    // Permissões simplificadas - apenas uma opção
     permissions: {
-        viewFullDashboard: {
-            type: Boolean,
-            default: false
-        },
-        viewOwnDataOnly: {
-            type: Boolean,
-            default: true
-        },
-        accessFinancialData: {
-            type: Boolean,
-            default: false
-        },
-        viewFullFinancial: {
-            type: Boolean,
-            default: false
-        },
-        manageClients: {
-            type: Boolean,
-            default: false
-        },
-        manageSchedule: {
-            type: Boolean,
-            default: true
-        },
-        manageProducts: {
-            type: Boolean,
-            default: false
-        },
-        manageServices: {
+        visualizarDados: {
             type: Boolean,
             default: false
         }

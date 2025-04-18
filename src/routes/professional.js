@@ -2,14 +2,13 @@ const express = require('express');
 const { body, param } = require('express-validator');
 const auth = require('../middleware/auth');
 const professionalController = require('../controllers/professional');
-const validator = require('../middleware/validator'); // Supondo que você tenha este middleware
+const validator = require('../middleware/validator');
 
 const router = express.Router();
 
 // Validation middleware
 const validateProfessional = [
     body('name').trim().notEmpty().withMessage('Name is required'),
-
     body('phone')
         .optional()
         .matches(/^\d+$/)
@@ -20,7 +19,11 @@ const validateProfessional = [
         .withMessage('Please enter a valid email'),
     body('cpf')
         .optional()
-        .trim()
+        .trim(),
+    body('visualizarDados')
+        .optional()
+        .isBoolean()
+        .withMessage('visualizarDados must be a boolean')
 ];
 
 // Validation for commission data
@@ -61,7 +64,7 @@ router.post(
     '/', 
     auth, 
     validateProfessional, 
-    validator, // Middleware to process validation errors
+    validator,
     professionalController.createProfessional
 );
 
