@@ -90,6 +90,30 @@ const professionalSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Service'
     }],
+    // Campos de comissão
+    commissionType: {
+        type: String,
+        enum: ['percentage', 'fixed', null],
+        default: 'percentage'
+    },
+    commissionValue: {
+        type: Number,
+        default: 0,
+        min: 0,
+        validate: {
+            validator: function(value) {
+                // Se o tipo for percentual, o valor deve estar entre 0 e 100
+                if (this.commissionType === 'percentage') {
+                    return value >= 0 && value <= 100;
+                }
+                // Se for valor fixo, só precisa ser não-negativo
+                return value >= 0;
+            },
+            message: props => props.type === 'percentage' 
+                ? 'Percentage commission must be between 0 and 100'
+                : 'Commission value must be non-negative'
+        }
+    },
     permissions: {
         viewFullDashboard: {
             type: Boolean,
@@ -116,6 +140,10 @@ const professionalSchema = new mongoose.Schema({
             default: true
         },
         manageProducts: {
+            type: Boolean,
+            default: false
+        },
+        manageServices: {
             type: Boolean,
             default: false
         }

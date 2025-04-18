@@ -14,6 +14,10 @@ const validateService = [
     body('commissionValue').optional().isFloat({ min: 0 }).withMessage('Valor da comissão deve ser positivo')
 ];
 
+// Get service categories
+router.get('/categories', auth, serviceController.getCategories);
+
+
 // Create new service
 router.post('/', auth, validateService, serviceController.createService);
 
@@ -29,7 +33,5 @@ router.put('/:id', auth, validateService, serviceController.updateService);
 // Delete/Deactivate service
 router.delete('/:id', auth, serviceController.deleteService);
 
-// Get service categories
-router.get('/categories', auth, serviceController.getCategories);
 
 module.exports = router;

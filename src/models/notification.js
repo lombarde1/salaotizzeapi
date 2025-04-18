@@ -18,7 +18,7 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['appointment', 'cancellation', 'reminder', 'system', 'financial', 'commission_available'],
+        enum: ['appointment', 'cancellation', 'reminder', 'system', 'financial', 'commission_available', 'commission_paid'],
         required: [true, 'Notification type is required']
     },
     relatedTo: {

@@ -1,44 +1,123 @@
 const express = require('express');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const auth = require('../middleware/auth');
 const professionalController = require('../controllers/professional');
+const validator = require('../middleware/validator'); // Supondo que você tenha este middleware
 
 const router = express.Router();
 
 // Validation middleware
 const validateProfessional = [
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('role').trim().notEmpty().withMessage('Professional role is required'),
-    body('phone').optional().matches(/^\d+$/).withMessage('Phone must contain only digits'),
-    body('email').optional().isEmail().withMessage('Please enter a valid email'),
-    body('commissionValue').isNumeric().withMessage('Commission value must be a number')
+
+    body('phone')
+        .optional()
+        .matches(/^\d+$/)
+        .withMessage('Phone must contain only digits'),
+    body('email')
+        .optional()
+        .isEmail()
+        .withMessage('Please enter a valid email'),
+    body('cpf')
+        .optional()
+        .trim()
 ];
 
-// Create new professional
-router.post('/', auth, validateProfessional, professionalController.createProfessional);
+// Validation for commission data
+const validateCommission = [
+    body('commissionType')
+        .isIn(['percentage', 'fixed'])
+        .withMessage('Commission type must be percentage or fixed'),
+    body('commissionValue')
+        .isNumeric()
+        .withMessage('Commission value must be a number')
+        .custom((value, { req }) => {
+            if (req.body.commissionType === 'percentage' && (value < 0 || value > 100)) {
+                throw new Error('Percentage commission must be between 0 and 100');
+            }
+            if (value < 0) {
+                throw new Error('Commission value cannot be negative');
+            }
+            return true;
+        })
+];
 
-// List professionals
-router.get('/', auth, professionalController.listProfessionals);
+// Validation for professional account creation
+const validateAccount = [
+    body('email').isEmail().withMessage('Please enter a valid email'),
+    body('password')
+        .isLength({ min: 6 })
+        .withMessage('Password must be at least 6 characters long')
+];
+
+// Parameter validation
+const validateId = [
+    param('id').isMongoId().withMessage('Invalid professional ID')
+];
+
+// Routes
+// Create new professional
+router.post(
+    '/', 
+    auth, 
+    validateProfessional, 
+    validator, // Middleware to process validation errors
+    professionalController.createProfessional
+);
+
+// List professionals with filtering
+router.get(
+    '/', 
+    auth, 
+    professionalController.listProfessionals
+);
 
 // Get professional by ID
-router.get('/:id', auth, professionalController.getProfessional);
+router.get(
+    '/:id', 
+    auth, 
+    validateId,
+    validator,
+    professionalController.getProfessional
+);
 
 // Update professional
-router.put('/:id', auth, validateProfessional, professionalController.updateProfessional);
+router.put(
+    '/:id', 
+    auth, 
+    validateId,
+    validateProfessional, 
+    validator,
+    professionalController.updateProfessional
+);
 
 // Delete/Deactivate professional
-router.delete('/:id', auth, professionalController.deleteProfessional);
+router.delete(
+    '/:id', 
+    auth, 
+    validateId,
+    validator,
+    professionalController.deleteProfessional
+);
 
 // Update commission settings
-router.put('/:id/commission', auth, [
-    body('commissionType').isIn(['percentage', 'fixed']).withMessage('Invalid commission type'),
-    body('commissionValue').isNumeric().withMessage('Commission value must be a number')
-], professionalController.updateCommission);
+router.put(
+    '/:id/commission', 
+    auth, 
+    validateId,
+    validateCommission, 
+    validator,
+    professionalController.updateCommission
+);
 
 // Create professional account
-router.post('/:id/account', auth, [
-    body('email').isEmail().withMessage('Please enter a valid email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
-], professionalController.createProfessionalAccount);
+router.post(
+    '/:id/account', 
+    auth, 
+    validateId,
+    validateAccount, 
+    validator,
+    professionalController.createProfessionalAccount
+);
 
 module.exports = router;

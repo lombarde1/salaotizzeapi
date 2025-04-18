@@ -1,81 +1,144 @@
 const Appointment = require('../models/appointment');
-const ScheduleSettings = require('../models/scheduleSettings');
-const Service = require('../models/service');
 const Professional = require('../models/professional');
+const Service = require('../models/service');
 const Client = require('../models/client');
 const notificationService = require('../services/notification');
 
+
+const getDayName = (dayIndex) => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    return days[dayIndex];
+  };
+
 // Helper function to check availability
-const checkAvailability = async (professionalId, date, duration) => {
-    // Get professional's schedule settings
-    const settings = await ScheduleSettings.findOne({ professionalId });
-    if (!settings) {
-        throw new Error('Professional schedule not configured');
+// Substitua a função checkAvailability por esta implementação corrigida
+// Corrigir a assinatura da função para incluir o parâmetro excludeAppointmentId
+const checkAvailability = async (professionalId, date, duration, excludeAppointmentId = null, allowOverride = false) => {
+    // Get professional details
+    const professional = await Professional.findById(professionalId);
+    if (!professional) {
+        throw new Error('Professional not found');
     }
 
     const appointmentDate = new Date(date);
     const dayOfWeek = appointmentDate.getDay();
-    const timeString = appointmentDate.toTimeString().slice(0, 5);
+    const dayName = getDayName(dayOfWeek);
+    
+    // Extract hours and minutes
+    const hours = appointmentDate.getHours().toString().padStart(2, '0');
+    const minutes = appointmentDate.getMinutes().toString().padStart(2, '0');
+    const timeString = `${hours}:${minutes}`;
 
-    // Check working hours
-    const workingHours = settings.workingHours.find(h => h.dayOfWeek === dayOfWeek && h.isWorking);
-    if (!workingHours) {
+    // Check if professional works on this day
+    if (!professional.workingHours || !professional.workingHours[dayName] || 
+        !professional.workingHours[dayName].start || !professional.workingHours[dayName].end) {
         throw new Error('Professional not working on this day');
     }
 
-    if (timeString < workingHours.startTime || timeString > workingHours.endTime) {
+    // Check working hours
+    const startTime = professional.workingHours[dayName].start;
+    const endTime = professional.workingHours[dayName].end;
+
+    const isOutsideHours = timeString < startTime || timeString > endTime;
+    if (isOutsideHours && !allowOverride) {
         throw new Error('Time outside working hours');
     }
 
-    // Check breaks
-    const isInBreak = settings.breaks.some(b => {
-        return b.dayOfWeek === dayOfWeek &&
-               timeString >= b.startTime &&
-               timeString <= b.endTime;
-    });
+    // Calculate the end time of the new appointment
+    const endTimeDate = new Date(appointmentDate.getTime() + (duration * 60000));
 
-    if (isInBreak) {
-        throw new Error('Time conflicts with break time');
-    }
+    // Get all appointments for that day
+    const dayStart = new Date(appointmentDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(appointmentDate);
+    dayEnd.setHours(23, 59, 59, 999);
 
-    // Check time off dates
-    const isTimeOff = settings.timeOffDates.some(d => {
-        const offDate = new Date(d);
-        return offDate.toDateString() === appointmentDate.toDateString();
-    });
-
-    if (isTimeOff) {
-        throw new Error('Professional is off on this date');
-    }
-
-    // Check existing appointments
-    const endTime = new Date(appointmentDate.getTime() + duration * 60000);
-    const conflictingAppointment = await Appointment.findOne({
+    const query = {
         professionalId,
-        date: { $lt: endTime },
-        $or: [
-            { status: 'scheduled' },
-            { status: 'confirmed' }
-        ],
-        $expr: {
-            $gt: [
-                { $add: ['$date', { $multiply: ['$duration', 60000] }] },
-                appointmentDate.getTime()
-            ]
-        }
+        status: { $in: ['scheduled', 'confirmed'] }
+    };
+    
+    if (excludeAppointmentId) {
+        query._id = { $ne: excludeAppointmentId };
+    }
+    
+    const allAppointments = await Appointment.find(query);
+
+    // Check for conflicts manually
+    const appointmentStartTime = appointmentDate.getTime();
+    const appointmentEndTime = endTimeDate.getTime();
+    
+    // Verificar conflitos manualmente em JavaScript
+    const conflictingAppointment = allAppointments.find(apt => {
+        const aptStartTime = apt.date.getTime();
+        const aptEndTime = aptStartTime + (apt.duration * 60000);
+        
+        // Verifica sobreposição: 
+        // Se o início do novo agendamento é antes do fim do existente
+        // E o fim do novo agendamento é depois do início do existente
+        return (appointmentStartTime < aptEndTime && appointmentEndTime > aptStartTime);
     });
 
-    if (conflictingAppointment) {
+    console.log('Manual conflict check:', {
+        newAppointment: {
+            start: appointmentDate.toISOString(),
+            startMs: appointmentStartTime,
+            end: endTimeDate.toISOString(),
+            endMs: appointmentEndTime
+        },
+        allAppointments: allAppointments.map(a => {
+            const start = a.date.getTime();
+            const end = start + (a.duration * 60000);
+            return {
+                id: a._id,
+                start: a.date.toISOString(),
+                startMs: start,
+                end: new Date(end).toISOString(),
+                endMs: end,
+                hasConflict: (appointmentStartTime < end && appointmentEndTime > start)
+            };
+        })
+    });
+
+    if (conflictingAppointment && !allowOverride) {
         throw new Error('Time slot conflicts with existing appointment');
     }
 
-    return true;
+    // Check max overrides per day (default: 2)
+    if (allowOverride) {
+        const maxOverridesPerDay = 2; // Default value
+        const overridesCount = await Appointment.countDocuments({
+            professionalId,
+            date: { $gte: dayStart, $lte: dayEnd },
+            isOverride: true
+        });
+        
+        if (overridesCount >= maxOverridesPerDay) {
+            throw new Error(`Maximum number of overrides (${maxOverridesPerDay}) for this day has been reached`);
+        }
+    }
+
+    return {
+        isAvailable: true,
+        isOutsideHours,
+        isOverride: conflictingAppointment ? true : isOutsideHours
+    };
 };
 
 // Create new appointment
 exports.createAppointment = async (req, res) => {
     try {
-        const { clientId, professionalId, serviceId, date, notes } = req.body;
+        const { 
+            clientId, 
+            professionalId, 
+            serviceId, 
+            date, 
+            notes, 
+            color = 'default', 
+            sendReminder = true, 
+            isOverride = false, 
+            recurrence = null 
+        } = req.body;
 
         // Validate entities exist
         const [client, professional, service] = await Promise.all([
@@ -91,26 +154,60 @@ exports.createAppointment = async (req, res) => {
             });
         }
 
-        // Check if professional provides the service
-        if (!professional.services.includes(serviceId)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Professional does not provide this service'
-            });
-        }
+      
+        console.log('Creating appointment:', {
+            userId: req.user._id,
+            professionalId,
+            date: new Date(date),
+            duration: service.duration
+        });
 
+        // Verify availability
+        const availability = await checkAvailability(
+            professionalId, 
+            date, 
+            service.duration, 
+            isOverride
+        );
+
+        
         // Create appointment
         const appointment = new Appointment({
+            userId: req.user._id,
             clientId,
             professionalId,
             serviceId,
             date,
             notes,
             duration: service.duration,
-            status: 'scheduled'
+            status: req.body.status || 'scheduled',
+            color,
+            sendReminder,
+            isOverride: availability.isOverride
         });
 
+        // Configure recurrence if applicable
+        if (recurrence && recurrence.isRecurring) {
+            appointment.recurrence = {
+                isRecurring: true,
+                pattern: recurrence.pattern || 'weekly',
+                interval: recurrence.interval || 1,
+                endDate: recurrence.endDate || null,
+                occurrences: recurrence.occurrences || null
+            };
+        }
+
         await appointment.save();
+
+        // If it's a recurring appointment, create all occurrences
+        let recurringAppointments = [];
+        if (recurrence && recurrence.isRecurring) {
+            recurringAppointments = await createRecurringAppointments(
+                appointment, 
+                recurrence, 
+                req.user._id
+            );
+        }
 
         // Create notification for new appointment
         const formattedDate = new Date(date).toLocaleString();
@@ -127,7 +224,11 @@ exports.createAppointment = async (req, res) => {
 
         res.status(201).json({
             status: 'success',
-            data: { appointment }
+            data: { 
+                appointment,
+                recurringAppointments: recurringAppointments.length > 0 ? recurringAppointments : undefined,
+                isOutsideWorkingHours: availability.isOutsideHours
+            }
         });
     } catch (error) {
         res.status(400).json({
@@ -136,6 +237,79 @@ exports.createAppointment = async (req, res) => {
         });
     }
 };
+
+// Helper function to create recurring appointments
+async function createRecurringAppointments(originalAppointment, recurrence, userId) {
+    const recurringAppointments = [];
+    const { pattern, interval, endDate, occurrences } = recurrence;
+    
+    let currentDate = new Date(originalAppointment.date);
+    let count = 0;
+    
+    // Determine end condition
+    const hasEndDate = endDate != null;
+    const hasOccurrences = occurrences != null && occurrences > 0;
+    const maxOccurrences = hasOccurrences ? occurrences : 52; // Default to max 1 year of weekly appointments
+    
+    while (count < maxOccurrences) {
+        // Add interval based on pattern
+        switch (pattern) {
+            case 'daily':
+                currentDate.setDate(currentDate.getDate() + interval);
+                break;
+            case 'weekly':
+                currentDate.setDate(currentDate.getDate() + (interval * 7));
+                break;
+            case 'monthly':
+                currentDate.setMonth(currentDate.getMonth() + interval);
+                break;
+            default:
+                break;
+        }
+        
+        // Check if we've passed the end date
+        if (hasEndDate && currentDate > new Date(endDate)) {
+            break;
+        }
+        
+        count++;
+        
+        // Skip the first occurrence as that's the original appointment
+        if (count === 0) continue;
+        
+        // Create the recurring appointment
+        const recurringAppointment = new Appointment({
+            userId,
+            clientId: originalAppointment.clientId,
+            professionalId: originalAppointment.professionalId,
+            serviceId: originalAppointment.serviceId,
+            date: new Date(currentDate),
+            notes: originalAppointment.notes,
+            duration: originalAppointment.duration,
+            status: originalAppointment.status,
+            color: originalAppointment.color,
+            sendReminder: originalAppointment.sendReminder,
+            recurrence: {
+                isRecurring: true,
+                pattern,
+                interval,
+                endDate: recurrence.endDate,
+                occurrences: recurrence.occurrences,
+                parentAppointmentId: originalAppointment._id
+            }
+        });
+        
+        try {
+            await recurringAppointment.save();
+            recurringAppointments.push(recurringAppointment);
+        } catch (error) {
+            console.error(`Could not create recurring appointment: ${error.message}`);
+            // Continue creating the rest of the appointments
+        }
+    }
+    
+    return recurringAppointments;
+}
 
 // Cancel appointment
 exports.cancelAppointment = async (req, res) => {
@@ -166,6 +340,50 @@ exports.cancelAppointment = async (req, res) => {
                 id: appointment._id
             }
         });
+
+        // Check if this is a recurring appointment and we need to cancel all future occurrences
+        const cancelAllFuture = req.query.cancelAllFuture === 'true';
+        
+        if (cancelAllFuture && appointment.recurrence && appointment.recurrence.isRecurring) {
+            // Cancel future appointments if this is part of a recurring series
+            let futureCancellations = 0;
+            
+            if (appointment.recurrence.parentAppointmentId) {
+                // This is a child appointment, cancel all future from this one
+                const futureAppointments = await Appointment.find({
+                    'recurrence.parentAppointmentId': appointment.recurrence.parentAppointmentId,
+                    date: { $gte: appointment.date },
+                    status: { $ne: 'cancelled' }
+                });
+                
+                for (const appt of futureAppointments) {
+                    appt.status = 'cancelled';
+                    await appt.save();
+                    futureCancellations++;
+                }
+            } else {
+                // This is a parent appointment, cancel all children
+                const childAppointments = await Appointment.find({
+                    'recurrence.parentAppointmentId': appointment._id,
+                    status: { $ne: 'cancelled' }
+                });
+                
+                for (const appt of childAppointments) {
+                    appt.status = 'cancelled';
+                    await appt.save();
+                    futureCancellations++;
+                }
+            }
+            
+            return res.status(200).json({
+                status: 'success',
+                data: { 
+                    appointment,
+                    futureCancellations
+                },
+                message: `Appointment cancelled along with ${futureCancellations} future occurrences`
+            });
+        }
 
         res.status(200).json({
             status: 'success',
@@ -209,6 +427,49 @@ exports.confirmAppointment = async (req, res) => {
             }
         });
 
+        // Check if we need to confirm all future recurring appointments
+        const confirmAllFuture = req.query.confirmAllFuture === 'true';
+        
+        if (confirmAllFuture && appointment.recurrence && appointment.recurrence.isRecurring) {
+            let futureConfirmations = 0;
+            
+            if (appointment.recurrence.parentAppointmentId) {
+                // This is a child appointment, confirm all future from this one
+                const futureAppointments = await Appointment.find({
+                    'recurrence.parentAppointmentId': appointment.recurrence.parentAppointmentId,
+                    date: { $gte: appointment.date },
+                    status: 'scheduled'
+                });
+                
+                for (const appt of futureAppointments) {
+                    appt.status = 'confirmed';
+                    await appt.save();
+                    futureConfirmations++;
+                }
+            } else {
+                // This is a parent appointment, confirm all children
+                const childAppointments = await Appointment.find({
+                    'recurrence.parentAppointmentId': appointment._id,
+                    status: 'scheduled'
+                });
+                
+                for (const appt of childAppointments) {
+                    appt.status = 'confirmed';
+                    await appt.save();
+                    futureConfirmations++;
+                }
+            }
+            
+            return res.status(200).json({
+                status: 'success',
+                data: { 
+                    appointment,
+                    futureConfirmations 
+                },
+                message: `Appointment confirmed along with ${futureConfirmations} future occurrences`
+            });
+        }
+
         res.status(200).json({
             status: 'success',
             data: { appointment }
@@ -242,9 +503,22 @@ exports.getAppointments = async (req, res) => {
             .populate('serviceId', 'name duration price')
             .sort({ date: 1 });
 
+        // Para cada agendamento, verificar se está fora do horário de trabalho
+        const appointmentsWithStatusInfo = await Promise.all(appointments.map(async (appt) => {
+            const isOutsideHours = await Appointment.isOutsideWorkingHours(
+                appt.professionalId._id,
+                appt.date
+            );
+            
+            return {
+                ...appt.toObject(),
+                isOutsideWorkingHours: isOutsideHours
+            };
+        }));
+
         res.json({
             status: 'success',
-            data: { appointments }
+            data: { appointments: appointmentsWithStatusInfo }
         });
     } catch (error) {
         res.status(400).json({
@@ -299,11 +573,12 @@ exports.getAvailableSlots = async (req, res) => {
     try {
         const { professionalId, date, serviceId } = req.query;
 
-        const settings = await ScheduleSettings.findOne({ professionalId });
-        if (!settings) {
+        // Get professional details
+        const professional = await Professional.findById(professionalId);
+        if (!professional) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Professional schedule not configured'
+                message: 'Professional not found'
             });
         }
 
@@ -317,10 +592,11 @@ exports.getAvailableSlots = async (req, res) => {
 
         const queryDate = new Date(date);
         const dayOfWeek = queryDate.getDay();
+        const dayName = getDayName(dayOfWeek);
 
-        // Get working hours for the day
-        const workingHours = settings.workingHours.find(h => h.dayOfWeek === dayOfWeek && h.isWorking);
-        if (!workingHours) {
+        // Check if professional works on this day
+        if (!professional.workingHours || !professional.workingHours[dayName] || 
+            !professional.workingHours[dayName].start || !professional.workingHours[dayName].end) {
             return res.json({
                 status: 'success',
                 data: { slots: [] }
@@ -329,26 +605,247 @@ exports.getAvailableSlots = async (req, res) => {
 
         // Generate all possible slots
         const slots = [];
-        const [startHour, startMinute] = workingHours.startTime.split(':').map(Number);
-        const [endHour, endMinute] = workingHours.endTime.split(':').map(Number);
+        const startTime = professional.workingHours[dayName].start.split(':').map(Number);
+        const endTime = professional.workingHours[dayName].end.split(':').map(Number);
+        
+        // Default slot duration to 15 minutes if not specified
+        const slotDuration = 15;
 
-        queryDate.setHours(startHour, startMinute, 0, 0);
-        const endTime = new Date(queryDate);
-        endTime.setHours(endHour, endMinute, 0, 0);
+        queryDate.setHours(startTime[0], startTime[1], 0, 0);
+        const endDateTime = new Date(queryDate);
+        endDateTime.setHours(endTime[0], endTime[1], 0, 0);
 
-        while (queryDate < endTime) {
+        while (queryDate < endDateTime) {
             try {
-                await checkAvailability(professionalId, queryDate, service.duration);
-                slots.push(new Date(queryDate));
+                const availability = await checkAvailability(professionalId, queryDate, service.duration);
+                
+                // Add the slot with information if it's inside or outside of working hours
+                slots.push({
+                    time: new Date(queryDate),
+                    available: availability.isAvailable,
+                    isOutsideWorkingHours: availability.isOutsideHours,
+                    isOverride: availability.isOverride
+                });
             } catch (error) {
-                // Slot not available, skip
+                // Slot not available, add with unavailable status
+                slots.push({
+                    time: new Date(queryDate),
+                    available: false,
+                    error: error.message
+                });
             }
-            queryDate.setMinutes(queryDate.getMinutes() + settings.slotDuration);
+            queryDate.setMinutes(queryDate.getMinutes() + slotDuration);
         }
 
         res.json({
             status: 'success',
             data: { slots }
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+
+// Atualizar agendamento
+exports.updateAppointment = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        // Campos permitidos para atualização
+        const allowedUpdates = [
+            'date', 'notes', 'status', 'duration', 'color', 
+            'sendReminder', 'clientId', 'professionalId', 'serviceId'
+        ];
+        
+        // Filtrar apenas campos permitidos
+        const updateData = {};
+        Object.keys(updates).forEach(key => {
+            if (allowedUpdates.includes(key)) {
+                updateData[key] = updates[key];
+            }
+        });
+        
+        const appointment = await Appointment.findOne({
+            _id: id,
+            userId: req.user._id
+        });
+        
+        if (!appointment) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Appointment not found'
+            });
+        }
+        
+        // Se estiver alterando data ou profissional ou serviço, verificar disponibilidade
+        if (updateData.date || updateData.professionalId || updateData.serviceId) {
+            const professionalId = updateData.professionalId || appointment.professionalId;
+            
+            let duration = appointment.duration;
+            if (updateData.serviceId) {
+                const service = await Service.findById(updateData.serviceId);
+                if (!service) {
+                    return res.status(404).json({
+                        status: 'error',
+                        message: 'Service not found'
+                    });
+                }
+                duration = service.duration;
+            }
+            
+            const date = updateData.date ? new Date(updateData.date) : appointment.date;
+            
+            // Verifica conflitos de agendamento, ignorando o agendamento atual
+            try {
+                // Obter profissional
+                const professional = await Professional.findById(professionalId);
+                if (!professional) {
+                    throw new Error('Professional not found');
+                }
+
+                const appointmentDate = new Date(date);
+                const dayOfWeek = appointmentDate.getDay();
+                const dayName = getDayName(dayOfWeek);
+                
+                // Verificar se profissional trabalha neste dia
+                if (!professional.workingHours || !professional.workingHours[dayName] || 
+                    !professional.workingHours[dayName].start || !professional.workingHours[dayName].end) {
+                    throw new Error('Professional not working on this day');
+                }
+
+                // Verificar horário de trabalho
+                const hours = appointmentDate.getHours().toString().padStart(2, '0');
+                const minutes = appointmentDate.getMinutes().toString().padStart(2, '0');
+                const timeString = `${hours}:${minutes}`;
+                
+                const startTime = professional.workingHours[dayName].start;
+                const endTime = professional.workingHours[dayName].end;
+
+                const isOutsideHours = timeString < startTime || timeString > endTime;
+                if (isOutsideHours && !appointment.isOverride) {
+                    throw new Error('Time outside working hours');
+                }
+
+                // Calcular hora de término
+                const endTimeDate = new Date(appointmentDate.getTime() + (duration * 60000));
+
+                // Obter todos os agendamentos do dia EXCETO o atual
+                const dayStart = new Date(appointmentDate);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(appointmentDate);
+                dayEnd.setHours(23, 59, 59, 999);
+
+                const allAppointments = await Appointment.find({
+                    professionalId,
+                    _id: { $ne: appointment._id }, // Ignorar o próprio agendamento
+                    date: { $gte: dayStart, $lte: dayEnd },
+                    status: { $in: ['scheduled', 'confirmed'] }
+                });
+
+                // Verificar conflitos manualmente
+                const appointmentStartTime = appointmentDate.getTime();
+                const appointmentEndTime = endTimeDate.getTime();
+                
+                const conflictingAppointment = allAppointments.find(apt => {
+                    const aptStartTime = apt.date.getTime();
+                    const aptEndTime = aptStartTime + (apt.duration * 60000);
+                    
+                    return (appointmentStartTime < aptEndTime && appointmentEndTime > aptStartTime);
+                });
+
+                if (conflictingAppointment && !appointment.isOverride) {
+                    throw new Error('Time slot conflicts with existing appointment');
+                }
+
+                // Atualizar flag de encaixe se necessário
+                updateData.isOverride = conflictingAppointment ? true : isOutsideHours;
+                
+            } catch (error) {
+                if (!appointment.isOverride) {
+                    return res.status(400).json({
+                        status: 'error',
+                        message: error.message
+                    });
+                }
+            }
+        }
+        
+        // Atualizar agendamento
+        Object.keys(updateData).forEach(key => {
+            appointment[key] = updateData[key];
+        });
+        
+        await appointment.save();
+        
+        // Atualizar agendamentos recorrentes, se solicitado
+        const updateAllFuture = req.query.updateAllFuture === 'true';
+        
+        if (updateAllFuture && appointment.recurrence && appointment.recurrence.isRecurring) {
+            let futureUpdates = 0;
+            
+            const updateKey = updateData.date ? 'date' : null;
+            let dateDiff = null;
+            
+            if (updateKey === 'date') {
+                const oldDate = new Date(appointment._doc.date);
+                const newDate = new Date(updateData.date);
+                dateDiff = newDate.getTime() - oldDate.getTime();
+            }
+            
+            // Atualizar agendamentos futuros
+            const query = {
+                userId: req.user._id,
+                status: { $nin: ['cancelled', 'completed'] }
+            };
+            
+            if (appointment.recurrence.parentAppointmentId) {
+                // Este é um agendamento filho, atualizar todos a partir deste
+                query['recurrence.parentAppointmentId'] = appointment.recurrence.parentAppointmentId;
+                query.date = { $gt: appointment.date };
+            } else {
+                // Este é um agendamento pai, atualizar todos os filhos
+                query['recurrence.parentAppointmentId'] = appointment._id;
+            }
+            
+            const futureAppointments = await Appointment.find(query);
+            
+            for (const appt of futureAppointments) {
+                if (updateKey === 'date' && dateDiff) {
+                    // Ajustar data mantendo o mesmo deslocamento
+                    const currentDate = new Date(appt.date);
+                    currentDate.setTime(currentDate.getTime() + dateDiff);
+                    appt.date = currentDate;
+                }
+                
+                // Copiar outros campos atualizados (exceto data que já foi tratada)
+                Object.keys(updateData).forEach(key => {
+                    if (key !== 'date') {
+                        appt[key] = updateData[key];
+                    }
+                });
+                
+                await appt.save();
+                futureUpdates++;
+            }
+            
+            return res.json({
+                status: 'success',
+                data: { 
+                    appointment,
+                    futureUpdates
+                },
+                message: `Appointment updated along with ${futureUpdates} future occurrences`
+            });
+        }
+        
+        res.json({
+            status: 'success',
+            data: { appointment }
         });
     } catch (error) {
         res.status(400).json({

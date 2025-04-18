@@ -37,8 +37,19 @@ router.get('/', auth, transactionController.getTransactions);
 router.post('/service', auth, validateService, transactionController.registerService);
 
 // Product transaction routes
-router.post('/product', auth, validateProduct, transactionController.registerProductSale);
+// Adicione esta rota ao arquivo routes/transaction.js
 
+const validateMultipleProducts = [
+    body('clientId').optional(),
+    body('items').isArray().withMessage('Items deve ser um array'),
+    body('items.*.productId').notEmpty().withMessage('Product ID é obrigatório'),
+    body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantidade deve ser pelo menos 1'),
+    body('paymentMethod').isIn(['cash', 'credit_card', 'debit_card', 'pix', 'transfer'])
+        .withMessage('Forma de pagamento inválida')
+];
+
+// Adicione esta rota junto com as outras rotas no arquivo
+router.post('/products', auth, validateMultipleProducts, transactionController.registerMultipleProducts);
 // Financial summary route
 router.get('/summary', auth, transactionController.getFinancialSummary);
 

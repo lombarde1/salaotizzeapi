@@ -6,6 +6,107 @@ const Client = require('../models/client');
 const notificationService = require('../services/notification');
 const mongoose = require('mongoose');
 
+
+// Adicione esta nova função ao arquivo controllers/transaction.js
+
+// Register multiple product sales in a single transaction
+exports.registerMultipleProducts = async (req, res) => {
+    try {
+        const { clientId, items, paymentMethod, date, notes } = req.body;
+
+        // Validate request body
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Items array is required with at least one product'
+            });
+        }
+
+        // Process each product
+        const processedItems = [];
+        let totalAmount = 0;
+
+        for (const item of items) {
+            const { productId, quantity } = item;
+            
+            // Validate product and check stock
+            const product = await Product.findById(productId);
+            if (!product) {
+                return res.status(404).json({
+                    status: 'error',
+                    message: `Product ${productId} not found`
+                });
+            }
+
+            if (product.stock < quantity) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: `Insufficient stock for product ${product.name}. Available: ${product.stock}`
+                });
+            }
+
+            // Calculate item total
+            const itemTotal = product.salePrice * quantity;
+            totalAmount += itemTotal;
+
+            // Add to processed items with all needed info
+            processedItems.push({
+                productId: product._id,
+                name: product.name,
+                quantity: quantity,
+                price: product.salePrice,
+                totalPrice: itemTotal,
+                commission: product.commissionType && product.commissionValue ? {
+                    type: product.commissionType,
+                    value: product.commissionValue,
+                    amount: product.commissionType === 'percentage' 
+                        ? (itemTotal * product.commissionValue) / 100 
+                        : product.commissionValue,
+                    status: 'pending'
+                } : undefined
+            });
+
+            // Update product stock
+            await Product.findByIdAndUpdate(productId, {
+                $inc: { stock: -quantity }
+            });
+        }
+
+        // Create transaction with all items
+        const transaction = new Transaction({
+            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id,
+            type: 'income',
+            category: 'product',
+            amount: totalAmount,
+            description: notes,
+            paymentMethod,
+            date: date || Date.now(),
+            status: 'paid',
+            client: clientId,
+            items: processedItems
+        });
+
+        await transaction.save();
+
+        // Update client's total spent
+        if (clientId) {
+            await Client.findByIdAndUpdate(clientId, {
+                $inc: { totalSpent: totalAmount }
+            });
+        }
+
+        res.status(201).json({
+            status: 'success',
+            data: { transaction }
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
 // Create a new transaction
 exports.createTransaction = async (req, res) => {
     try {
@@ -43,34 +144,70 @@ exports.createTransaction = async (req, res) => {
 };
 
 // Register a service transaction
+// Register a service transaction
 exports.registerService = async (req, res) => {
     try {
-        const { serviceId, clientId, professionalId, amount, paymentMethod, date } = req.body;
+        console.log("Iniciando registerService com dados:", {
+            serviceId: req.body.serviceId,
+            professionalId: req.body.professionalId,
+            amount: req.body.amount
+        });
 
-        // Validate service and get commission details
+        const { serviceId, clientId, professionalId, amount, paymentMethod, date, notes } = req.body;
+
+        // Validar serviço
         const service = await Service.findById(serviceId);
         if (!service) {
+            console.log("Serviço não encontrado:", serviceId);
             return res.status(404).json({
                 status: 'error',
                 message: 'Service not found'
             });
         }
+        console.log("Serviço encontrado:", service.name);
 
-        // Get professional's commission settings
+        // Obter configurações de comissão do profissional
         const professional = await Professional.findById(professionalId);
         if (!professional) {
+            console.log("Profissional não encontrado:", professionalId);
             return res.status(404).json({
                 status: 'error',
                 message: 'Professional not found'
             });
         }
+        
+        console.log("Profissional encontrado:", {
+            id: professional._id,
+            name: professional.name,
+            commissionType: professional.commissionType,
+            commissionValue: professional.commissionValue,
+            userId: professional.userId,
+            userAccountId: professional.userAccountId
+        });
 
-        // Create main transaction
+        // ID do usuário atual (dono)
+        const currentUserId = req.user.role === 'professional' ? req.user.parentId : req.user._id;
+        console.log("ID do usuário atual (dono):", currentUserId);
+        
+        // Verificar se o profissional é o dono
+        // Um profissional é considerado como dono se:
+        // 1. O ID do usuário logado é igual ao userAccountId do profissional
+        // OU
+        // 2. Não existe conta de usuário para o profissional (userAccountId é nulo)
+        //    e a requisição está sendo feita pelo dono que cadastrou o profissional
+        const isProfessionalOwner = 
+            (professional.userAccountId && professional.userAccountId.toString() === req.user._id.toString()) ||
+            (!professional.userAccountId && professional.userId.toString() === currentUserId.toString() && req.user._id.toString() === currentUserId.toString());
+        
+        console.log("O profissional é o dono?", isProfessionalOwner);
+
+        // Criar transação principal
         const transaction = new Transaction({
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id,
+            userId: currentUserId,
             type: 'income',
             category: 'service',
             amount,
+            description: notes,
             paymentMethod,
             date: date || Date.now(),
             status: 'paid',
@@ -79,61 +216,90 @@ exports.registerService = async (req, res) => {
             reference: {
                 model: 'Service',
                 id: serviceId
+            },
+            commission: {
+                status: 'pending' // Inicializar com status pendente
             }
         });
 
-        // Calculate commission
+        // Calcular comissão baseada apenas no profissional
         let commissionAmount = 0;
-        let commissionType = null;
-        let commissionValue = null;
-
-        // Only calculate commission if the professional is not the owner
-        if (professional.userId !== req.user._id) {
-            commissionType = service.commissionType === 'default' 
-                ? professional.commissionType 
-                : service.commissionType;
-            commissionValue = service.commissionType === 'default'
-                ? professional.commissionValue
-                : service.commissionValue;
-
-            commissionAmount = transaction.calculateCommission(commissionType, commissionValue);
-
-            // Add commission details
-            transaction.commission = {
-                type: commissionType,
-                value: commissionValue,
-                amount: commissionAmount,
-                status: 'paid'
-            };
+        
+        // Calcular comissão apenas se o profissional não for o proprietário
+        if (!isProfessionalOwner) {
+            console.log('Profissional não é o proprietário, calculando comissão...');
+            
+            if (professional.commissionType && professional.commissionValue !== undefined) {
+                console.log(`Usando config: type=${professional.commissionType}, value=${professional.commissionValue}`);
+                
+                if (professional.commissionType === 'percentage') {
+                    commissionAmount = (professional.commissionValue / 100) * amount;
+                    console.log(`Cálculo percentual: (${professional.commissionValue}/100) * ${amount} = ${commissionAmount}`);
+                } else if (professional.commissionType === 'fixed') {
+                    commissionAmount = professional.commissionValue;
+                    console.log(`Valor fixo: ${commissionAmount}`);
+                }
+                
+                // Adicionar valor da comissão à transação
+                transaction.commission.amount = commissionAmount;
+                console.log("Comissão adicionada à transação:", commissionAmount);
+            } else {
+                console.log("Profissional não tem configuração de comissão válida");
+            }
+        } else {
+            console.log("Comissão não calculada: profissional é o proprietário");
         }
 
+        console.log("Transação antes de salvar:", {
+            id: transaction._id,
+            amount: transaction.amount,
+            commission: transaction.commission
+        });
+        
         await transaction.save();
-
-        // Create commission notification for both professional and parent account
-        await notificationService.createNotification({
-            userId: professional.userAccountId,
-            title: "Comissão Disponível",
-            message: `Você tem uma nova comissão disponível de R$ ${commissionAmount.toFixed(2)} pelo serviço realizado`,
-            type: "commission_available",
-            relatedTo: {
-                model: "Transaction",
-                id: transaction._id
-            }
+        
+        console.log("Transação após salvar:", {
+            id: transaction._id,
+            amount: transaction.amount,
+            commission: transaction.commission
         });
 
-        // Update client's last visit and total spent
+        // Criar notificação de comissão para o profissional
+        if (commissionAmount > 0 && professional.userAccountId) {
+            console.log("Criando notificação para o profissional", professional.userAccountId);
+            await notificationService.createNotification({
+                userId: professional.userAccountId,
+                title: "Comissão Disponível",
+                message: `Você tem uma nova comissão disponível de R$ ${commissionAmount.toFixed(2)} pelo serviço realizado`,
+                type: "commission_available",
+                relatedTo: {
+                    model: "Transaction",
+                    id: transaction._id
+                }
+            });
+        } else {
+            console.log("Não criando notificação:", {
+                commissionAmount,
+                hasUserAccount: !!professional.userAccountId
+            });
+        }
+
+        // Atualizar última visita e total gasto do cliente
         if (clientId) {
             await Client.findByIdAndUpdate(clientId, {
                 $set: { lastVisit: date || Date.now() },
                 $inc: { totalSpent: amount }
             });
+            console.log("Cliente atualizado:", clientId);
         }
 
+        console.log("Completando registerService com sucesso");
         res.status(201).json({
             status: 'success',
             data: { transaction }
         });
     } catch (error) {
+        console.error("Erro em registerService:", error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -142,11 +308,12 @@ exports.registerService = async (req, res) => {
 };
 
 // Register a product sale
+// Register a product sale
 exports.registerProductSale = async (req, res) => {
     try {
-        const { productId, quantity, clientId, paymentMethod, date } = req.body;
+        const { productId, quantity, clientId, professionalId, paymentMethod, date } = req.body;
 
-        // Validate product and check stock
+        // Validar produto e verificar estoque
         const product = await Product.findById(productId);
         if (!product) {
             return res.status(404).json({
@@ -162,10 +329,22 @@ exports.registerProductSale = async (req, res) => {
             });
         }
 
-        // Calculate total amount
+        // Calcular valor total
         const amount = product.salePrice * quantity;
 
-        // Create transaction
+        // Obter profissional se foi especificado
+        let professional = null;
+        if (professionalId) {
+            professional = await Professional.findById(professionalId);
+            if (!professional) {
+                return res.status(404).json({
+                    status: 'error',
+                    message: 'Professional not found'
+                });
+            }
+        }
+
+        // Criar transação
         const transaction = new Transaction({
             userId: req.user.role === 'professional' ? req.user.parentId : req.user._id,
             type: 'income',
@@ -175,35 +354,47 @@ exports.registerProductSale = async (req, res) => {
             date: date || Date.now(),
             status: 'paid',
             client: clientId,
+            professional: professionalId, // Agora também guardamos o vendedor para produtos
             reference: {
                 model: 'Product',
                 id: productId
             }
         });
 
-        // Add commission if applicable
-        if (product.commissionType && product.commissionValue) {
-            const commissionAmount = transaction.calculateCommission(
-                product.commissionType,
-                product.commissionValue
-            );
+        // Adicionar comissão se tiver um profissional associado
+        if (professional && professional.userId.toString() !== req.user._id.toString()) {
+            const commissionAmount = transaction.calculateCommission(professional);
 
             transaction.commission = {
-                type: product.commissionType,
-                value: product.commissionValue,
+                type: professional.commissionType,
+                value: professional.commissionValue,
                 amount: commissionAmount,
-                status: 'pending'
+                status: 'pending' // Sempre pendente até pagamento explícito
             };
+            
+            // Criar notificação para o profissional
+            if (commissionAmount > 0 && professional.userAccountId) {
+                await notificationService.createNotification({
+                    userId: professional.userAccountId,
+                    title: "Comissão Disponível",
+                    message: `Você tem uma nova comissão disponível de R$ ${commissionAmount.toFixed(2)} pela venda de produto`,
+                    type: "commission_available",
+                    relatedTo: {
+                        model: "Transaction",
+                        id: transaction._id
+                    }
+                });
+            }
         }
 
         await transaction.save();
 
-        // Update product stock
+        // Atualizar estoque do produto
         await Product.findByIdAndUpdate(productId, {
             $inc: { stock: -quantity }
         });
 
-        // Update client's total spent
+        // Atualizar total gasto do cliente
         if (clientId) {
             await Client.findByIdAndUpdate(clientId, {
                 $inc: { totalSpent: amount }

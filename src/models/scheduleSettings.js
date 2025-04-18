@@ -63,11 +63,21 @@ const scheduleSettingsSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 15,
-        default: 30
+        default: 15  // Modificado para 15 minutos como padrão
     },
     timeOffDates: [{
         type: Date
-    }]
+    }],
+    allowOverrideBookings: {
+        type: Boolean,
+        default: false,
+        description: "Permite encaixar agendamentos em horários já ocupados"
+    },
+    maxOverridesPerDay: {
+        type: Number,
+        default: 2,
+        description: "Número máximo de encaixes permitidos por dia"
+    }
 }, {
     timestamps: true
 });

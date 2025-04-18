@@ -1,3 +1,6 @@
+// Atualize seu modelo de Transaction em models/transaction.js
+// Adicione o campo "items" ao schema existente
+
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
@@ -64,7 +67,43 @@ const transactionSchema = new mongoose.Schema({
             enum: ['pending', 'paid', 'cancelled'],
             default: 'pending'
         }
-    }
+    },
+    // Novo campo para armazenar múltiplos produtos
+    items: [{
+        productId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Product'
+        },
+        name: String,
+        quantity: {
+            type: Number,
+            min: 1,
+            required: true
+        },
+        price: {
+            type: Number,
+            min: 0,
+            required: true
+        },
+        totalPrice: {
+            type: Number,
+            min: 0,
+            required: true
+        },
+        commission: {
+            type: {
+                type: String,
+                enum: ['percentage', 'fixed']
+            },
+            value: Number,
+            amount: Number,
+            status: {
+                type: String,
+                enum: ['pending', 'paid', 'cancelled'],
+                default: 'pending'
+            }
+        }
+    }]
 }, {
     timestamps: true
 });
@@ -78,12 +117,15 @@ transactionSchema.pre('save', function(next) {
 });
 
 // Method to calculate commission
-transactionSchema.methods.calculateCommission = function(commissionType, commissionValue) {
-    if (!commissionType || !commissionValue) return 0;
+// Método para calcular comissão baseada no profissional em vez do produto/serviço
+transactionSchema.methods.calculateCommission = function(professional) {
+    if (!professional || !professional.commissionType || !professional.commissionValue) {
+        return 0;
+    }
     
-    return commissionType === 'percentage' 
-        ? (this.amount * commissionValue) / 100
-        : commissionValue;
+    return professional.commissionType === 'percentage' 
+        ? (this.amount * professional.commissionValue) / 100
+        : professional.commissionValue;
 };
 
 // Static method to get financial summary

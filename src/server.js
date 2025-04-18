@@ -16,6 +16,7 @@ const transactionRoutes = require('./routes/transaction');
 const reportsRoutes = require('./routes/reports');
 const dashboardRoutes = require('./routes/dashboard');
 const notificationRoutes = require('./routes/notification');
+const commissionRoutes = require('./routes/commission');
 
 // Load environment variables
 dotenv.config();
@@ -39,13 +40,23 @@ mongoose.connect(MONGODB_URI, {
     console.log('Connected to MongoDB successfully');
     
     // Initialize scheduled jobs
-    // Run appointment reminders every day at 8:00 AM
-    cron.schedule('0 8 * * *', async () => {
+    // Lembretes de agendamento para amanhã - às 18h todos os dias
+    cron.schedule('0 18 * * *', async () => {
         try {
             await scheduledJobs.createAppointmentReminders();
             console.log('Appointment reminders job completed successfully');
         } catch (error) {
             console.error('Error in appointment reminders job:', error);
+        }
+    });
+
+    // Lembretes de agendamento para hoje - às 8h todos os dias
+    cron.schedule('0 8 * * *', async () => {
+        try {
+            await scheduledJobs.sendAppointmentRemindersForToday();
+            console.log('Today appointment reminders job completed successfully');
+        } catch (error) {
+            console.error('Error in today appointment reminders job:', error);
         }
     });
 
@@ -78,6 +89,16 @@ mongoose.connect(MONGODB_URI, {
             console.error('Error in inactive clients check job:', error);
         }
     });
+    
+    // Limpeza de agendamentos antigos - toda segunda-feira à 1h da manhã
+    cron.schedule('0 1 * * 1', async () => {
+        try {
+            await scheduledJobs.cleanOldAppointments(90); // Limpa agendamentos mais antigos que 90 dias
+            console.log('Old appointments cleanup job completed successfully');
+        } catch (error) {
+            console.error('Error in old appointments cleanup job:', error);
+        }
+    });
 
 }).catch((err) => {
     console.error('MongoDB connection error:', err);
@@ -95,6 +116,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/commissions', commissionRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

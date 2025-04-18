@@ -1,27 +1,41 @@
 const Professional = require('../models/professional');
 const User = require('../models/user');
 
-// Create new professional
+/**
+ * Create new professional
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.createProfessional = async (req, res) => {
     try {
+        // Prepare permissions object from array if provided
+        let permissions = {
+            viewFullDashboard: false,
+            viewOwnDataOnly: true,
+            accessFinancialData: false,
+            viewFullFinancial: false,
+            manageProducts: false,
+            manageServices: false,
+            manageSchedule: true,
+            manageClients: false
+        };
+
+        // Override defaults if permissions array is provided
+        if (Array.isArray(req.body.permissions)) {
+            Object.keys(permissions).forEach(perm => {
+                permissions[perm] = req.body.permissions.includes(perm);
+            });
+        }
+
         const professional = new Professional({
             ...req.body,
             userId: req.user._id,
-            role: 'professional', // Set default role
-            permissions: {
-                viewFullDashboard: req.body.permissions?.includes('viewFullDashboard') || false,
-                viewOwnDataOnly: req.body.permissions?.includes('viewOwnDataOnly') || true,
-                accessFinancialData: req.body.permissions?.includes('accessFinancialData') || false,
-                manageProducts: req.body.permissions?.includes('manageProducts') || false,
-                manageServices: req.body.permissions?.includes('manageServices') || false,
-                manageSchedule: req.body.permissions?.includes('manageSchedule') || false,
-                manageClients: req.body.permissions?.includes('manageClients') || false
-            }
+            permissions
         });
 
         await professional.save();
 
-        // If creating a professional account, set role as 'professional'
+        // Create user account if email and password provided
         if (req.body.email && req.body.password) {
             const user = new User({
                 name: professional.name,
@@ -48,192 +62,29 @@ exports.createProfessional = async (req, res) => {
     }
 };
 
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-
-// List professionals with filters
+/**
+ * List professionals with filtering and sorting
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.listProfessionals = async (req, res) => {
     try {
         const query = { userId: req.user._id };
-
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-
+        
         // Apply filters
         if (req.query.status) query.status = req.query.status;
         if (req.query.role) query.role = req.query.role;
-        if (req.query.search) {
-            query.$text = { $search: req.query.search };
-
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-        }
-
+        if (req.query.search) query.$text = { $search: req.query.search };
+        
         // Apply sorting
-        let sort = {};
-
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
+        let sort = { name: 1 }; // Default sort
+        
         if (req.query.sortBy) {
             const parts = req.query.sortBy.split(':');
-            sort[parts[0]] = parts[1] === 'desc' ? -1 : 1;
-        } else {
-            sort = { name: 1 };
-
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
+            sort = { [parts[0]]: parts[1] === 'desc' ? -1 : 1 };
         }
 
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-        }
-
+        // Execute query
         const professionals = await Professional.find(query)
             .select('name phone email cpf role services permissions status workingHours specialties address userAccountId createdAt updatedAt')
             .sort(sort);
@@ -250,40 +101,11 @@ exports.updateCommission = async (req, res) => {
     }
 };
 
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-
-// Get professional by ID
+/**
+ * Get professional by ID
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.getProfessional = async (req, res) => {
     try {
         const professional = await Professional.findOne({
@@ -298,15 +120,21 @@ exports.getProfessional = async (req, res) => {
             });
         }
 
-        // Check if the professional has account credentials
-        const user = await User.findOne({ _id: professional.userId }).select('_id email');
-        const hasCredentials = !!user;
+        // Check if professional has user account
+        const hasAccount = !!professional.userAccountId;
+        let accountEmail = null;
+        
+        if (hasAccount) {
+            const user = await User.findById(professional.userAccountId).select('email');
+            accountEmail = user ? user.email : null;
+        }
 
         res.json({
             status: 'success',
             data: { 
                 professional,
-                hasCredentials
+                hasAccount,
+                accountEmail
             }
         });
     } catch (error) {
@@ -317,44 +145,35 @@ exports.getProfessional = async (req, res) => {
     }
 };
 
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-
-// Update professional
+/**
+ * Update professional
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.updateProfessional = async (req, res) => {
     try {
+        // Handle permissions array conversion
+        if (Array.isArray(req.body.permissions)) {
+            const permissionsObject = {};
+            const availablePermissions = [
+                'viewFullDashboard', 'viewOwnDataOnly', 'accessFinancialData',
+                'viewFullFinancial', 'manageProducts', 'manageServices',
+                'manageSchedule', 'manageClients'
+            ];
+            
+            availablePermissions.forEach(perm => {
+                permissionsObject[perm] = req.body.permissions.includes(perm);
+            });
+            
+            req.body.permissions = permissionsObject;
+        }
+
         const updates = Object.keys(req.body);
-        const allowedUpdates = ['name', 'phone', 'email', 'cpf', 'role', 'status', 'permissions'];
+        const allowedUpdates = [
+            'name', 'phone', 'email', 'cpf', 'role', 'status',
+            'permissions', 'workingHours', 'specialties', 'address'
+        ];
+        
         const isValidOperation = updates.every(update => allowedUpdates.includes(update));
 
         if (!isValidOperation) {
@@ -376,8 +195,21 @@ exports.updateProfessional = async (req, res) => {
             });
         }
 
-        updates.forEach(update => professional[update] = req.body[update]);
+        // Update each field
+        updates.forEach(update => {
+            professional[update] = req.body[update];
+        });
+        
         await professional.save();
+
+        // Update user account if exists
+        if (professional.userAccountId && req.body.email) {
+            await User.findByIdAndUpdate(professional.userAccountId, {
+                name: req.body.name,
+                email: req.body.email,
+                phone: req.body.phone
+            });
+        }
 
         res.json({
             status: 'success',
@@ -391,10 +223,22 @@ exports.updateProfessional = async (req, res) => {
     }
 };
 
-// Update professional commission settings
+/**
+ * Update commission settings
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.updateCommission = async (req, res) => {
     try {
         const { commissionType, commissionValue } = req.body;
+
+        // Validate commission data
+        if (!commissionType || !commissionValue) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Commission type and value are required'
+            });
+        }
 
         const professional = await Professional.findOne({
             _id: req.params.id,
@@ -408,13 +252,21 @@ exports.updateCommission = async (req, res) => {
             });
         }
 
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
+        // Update schema to include commission fields if not already there
+        const updatedProfessional = await Professional.findByIdAndUpdate(
+            professional._id,
+            { 
+                $set: { 
+                    commissionType,
+                    commissionValue: parseFloat(commissionValue)
+                }
+            },
+            { new: true }
+        );
 
         res.json({
             status: 'success',
-            data: { professional }
+            data: { professional: updatedProfessional }
         });
     } catch (error) {
         res.status(400).json({
@@ -424,7 +276,11 @@ exports.updateCommission = async (req, res) => {
     }
 };
 
-// Delete/Deactivate professional
+/**
+ * Deactivate professional
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.deleteProfessional = async (req, res) => {
     try {
         const professional = await Professional.findOne({
@@ -439,8 +295,14 @@ exports.deleteProfessional = async (req, res) => {
             });
         }
 
+        // Soft delete by marking as inactive
         professional.status = 'inactive';
         await professional.save();
+
+        // Deactivate user account if exists
+        if (professional.userAccountId) {
+            await User.findByIdAndUpdate(professional.userAccountId, { status: 'inactive' });
+        }
 
         res.json({
             status: 'success',
@@ -454,40 +316,11 @@ exports.deleteProfessional = async (req, res) => {
     }
 };
 
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
-            status: 'success',
-            data: { professional }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-
-// Create user account for professional
+/**
+ * Create user account for professional
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.createProfessionalAccount = async (req, res) => {
     try {
         const professional = await Professional.findOne({
@@ -518,71 +351,35 @@ exports.createProfessionalAccount = async (req, res) => {
             });
         }
 
-        // Generate a temporary password
-        const temporaryPassword = password;
-
-        // Create new user account with role 'professional'
+        // Create new user account
         const parentUser = await User.findById(req.user._id);
         const user = new User({
             name: professional.name,
             email: professional.email || email,
             phone: professional.phone,
             cpf: professional.cpf,
-            password: temporaryPassword,
+            password,
             role: 'professional',
             status: 'active',
             parentId: req.user._id,
-            companyName: parentUser.companyName,
-            plan: parentUser.plan,
-            planValidUntil: parentUser.planValidUntil
+            companyName: parentUser?.companyName,
+            plan: parentUser?.plan,
+            planValidUntil: parentUser?.planValidUntil
         });
 
         await user.save();
 
-        // Link user account to professional
+        // Link account to professional
         professional.userAccountId = user._id;
         await professional.save();
 
         res.status(201).json({
-            message: 'Professional account created successfully',
-            professionalId: professional._id,
-            credentials: {
-                email: email,
-                temporaryPassword: temporaryPassword
-            }
-        });
-    } catch (error) {
-        res.status(400).json({
-            status: 'error',
-            message: error.message
-        });
-    }
-};
-
-// Update professional commission settings
-exports.updateCommission = async (req, res) => {
-    try {
-        const { commissionType, commissionValue } = req.body;
-
-        const professional = await Professional.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        });
-
-        if (!professional) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Professional not found'
-            });
-        }
-
-        professional.commissionType = commissionType;
-        professional.commissionValue = commissionValue;
-        await professional.save();
-
-        res.json({
             status: 'success',
-            data: { professional }
+            message: 'Professional account created successfully',
+            data: {
+                professionalId: professional._id,
+                email
+            }
         });
     } catch (error) {
         res.status(400).json({
