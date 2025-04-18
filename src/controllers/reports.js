@@ -1,4 +1,4 @@
-// src/controllers/reports.js (corrigido)
+// src/controllers/reports.js
 
 const Transaction = require('../models/transaction');
 const Client = require('../models/client');
@@ -7,7 +7,7 @@ const Service = require('../models/service');
 const Product = require('../models/product');
 const mongoose = require('mongoose');
 
-// Helper function to get the effective userId and check permissions
+// Helper function para obter o ID do usuário efetivo e verificar permissões
 const getEffectiveUserIdAndCheckPermissions = async (req) => {
     let userId = req.user._id;
     let canAccessReports = true;
@@ -15,12 +15,15 @@ const getEffectiveUserIdAndCheckPermissions = async (req) => {
     if (req.user.role === 'professional') {
         const professional = await Professional.findOne({ userAccountId: userId });
         if (!professional) {
-            throw new Error('Professional not found');
+            throw new Error('Profissional não encontrado');
         }
-        if (!professional.permissions.viewReports) {
+
+        // Verificar a permissão visualizarDados no sistema atual
+        if (!professional.permissions || !professional.permissions.visualizarDados) {
             canAccessReports = false;
         }
-        userId = professional.userId; // Use the parent account's userId
+        
+        userId = professional.userId; // Usar o ID da conta do proprietário
     }
 
     return { userId, canAccessReports };
@@ -79,15 +82,13 @@ const getDateRange = (filterType, customStartDate, customEndDate) => {
 };
 
 // Financial Reports
-// Versão corrigida da função getFinancialSummary
-
 const getFinancialSummary = async (req, res) => {
     try {
         const { userId, canAccessReports } = await getEffectiveUserIdAndCheckPermissions(req);
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar relatórios financeiros.'
             });
         }
 
@@ -106,14 +107,14 @@ const getFinancialSummary = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid date format'
+                message: 'Formato de data inválido'
             });
         }
 
@@ -245,7 +246,7 @@ const getProfessionalPerformance = async (req, res) => {
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar desempenho de profissionais.'
             });
         }
 
@@ -264,14 +265,14 @@ const getProfessionalPerformance = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid date format'
+                message: 'Formato de data inválido'
             });
         }
 
@@ -361,7 +362,7 @@ const getTopClients = async (req, res) => {
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar dados de clientes.'
             });
         }
 
@@ -380,14 +381,14 @@ const getTopClients = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid date format'
+                message: 'Formato de data inválido'
             });
         }
 
@@ -469,7 +470,7 @@ const getPopularServices = async (req, res) => {
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar dados de serviços.'
             });
         }
 
@@ -488,14 +489,14 @@ const getPopularServices = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid date format'
+                message: 'Formato de data inválido'
             });
         }
 
@@ -570,14 +571,14 @@ const getPopularServices = async (req, res) => {
     }
 };
 
-// NOVO: Relatório detalhado por tipo de pagamento
+// Relatório detalhado por tipo de pagamento
 const getPaymentMethodReport = async (req, res) => {
     try {
         const { userId, canAccessReports } = await getEffectiveUserIdAndCheckPermissions(req);
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar relatórios de pagamento.'
             });
         }
 
@@ -596,14 +597,14 @@ const getPaymentMethodReport = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid date format'
+                message: 'Formato de data inválido'
             });
         }
 
@@ -659,14 +660,14 @@ const getPaymentMethodReport = async (req, res) => {
     }
 };
 
-// NOVO: Relatório detalhado de status de pagamentos
+// Relatório detalhado de status de pagamentos
 const getPaymentStatusReport = async (req, res) => {
     try {
         const { userId, canAccessReports } = await getEffectiveUserIdAndCheckPermissions(req);
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar relatórios de status de pagamento.'
             });
         }
 
@@ -685,14 +686,14 @@ const getPaymentStatusReport = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid date format'
+                message: 'Formato de data inválido'
             });
         }
 
@@ -747,14 +748,14 @@ const getPaymentStatusReport = async (req, res) => {
     }
 };
 
-// NOVO: Relatório detalhado de transações
+// Relatório detalhado de transações
 const getDetailedTransactions = async (req, res) => {
     try {
         const { userId, canAccessReports } = await getEffectiveUserIdAndCheckPermissions(req);
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar detalhes de transações.'
             });
         }
 
@@ -783,7 +784,7 @@ const getDetailedTransactions = async (req, res) => {
         } else {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either filterType or start/end dates are required'
+                message: 'Filtro de data ou intervalo de datas é necessário'
             });
         }
 
@@ -838,14 +839,14 @@ const getDetailedTransactions = async (req, res) => {
     }
 };
 
-// NOVO: Histórico completo de cliente
+// Histórico completo de cliente
 const getClientHistory = async (req, res) => {
     try {
         const { userId, canAccessReports } = await getEffectiveUserIdAndCheckPermissions(req);
         if (!canAccessReports) {
             return res.status(403).json({
                 status: 'error',
-                message: 'Access denied. Insufficient permissions.'
+                message: 'Acesso negado. Permissões insuficientes para visualizar histórico de clientes.'
             });
         }
 
@@ -854,7 +855,7 @@ const getClientHistory = async (req, res) => {
         if (!clientId) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Client ID is required'
+                message: 'ID do cliente é obrigatório'
             });
         }
 
@@ -867,7 +868,7 @@ const getClientHistory = async (req, res) => {
         if (!client) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Client not found'
+                message: 'Cliente não encontrado'
             });
         }
 
@@ -935,6 +936,285 @@ const getClientHistory = async (req, res) => {
     }
 };
 
+// Caso o professional queira visualizar apenas seus próprios dados
+// Caso o professional queira visualizar apenas seus próprios dados
+const getProfessionalOwnData = async (req, res) => {
+    try {
+        // Verificar se é um profissional
+        if (req.user.role !== 'professional') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Esta função está disponível apenas para profissionais'
+            });
+        }
+
+        const professional = await Professional.findOne({ userAccountId: req.user._id });
+        if (!professional) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Perfil profissional não encontrado'
+            });
+        }
+
+        const ownerId = professional.userId;
+        const professionalId = professional._id;
+
+        // Obter período (última semana por padrão)
+        const { filterType = 'esta_semana', startDate, endDate } = req.query;
+        let start, end;
+        
+        if (filterType) {
+            const dateRange = getDateRange(filterType, startDate, endDate);
+            start = dateRange.start;
+            end = dateRange.end;
+        } else if (startDate && endDate) {
+            start = new Date(startDate);
+            end = new Date(endDate);
+        } else {
+            // Default para última semana se não houver filtro
+            const now = new Date();
+            start = new Date(now);
+            start.setDate(start.getDate() - 7);
+            end = new Date(now);
+        }
+
+        // Obter informações de serviços realizados por este profissional
+        const services = await Transaction.find({
+            userId: ownerId,
+            professional: professionalId,
+            type: 'income',
+            category: 'service',
+            date: { $gte: start, $lte: end }
+        })
+        .sort({ date: -1 })
+        .populate('client', 'name')
+        .populate({
+            path: 'reference.id',
+            select: 'name price'
+        })
+        .lean();
+
+        // Obter informações de comissões
+        const commissionData = await Transaction.aggregate([
+            {
+                $match: {
+                    userId: ownerId,
+                    professional: professionalId,
+                    date: { $gte: start, $lte: end },
+                    'commission.amount': { $gt: 0 }
+                }
+            },
+            {
+                $group: {
+                    _id: '$commission.status',
+                    total: { $sum: '$commission.amount' },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Processar dados de comissão
+        const commissions = {
+            pending: 0,
+            paid: 0,
+            total: 0,
+            count: 0
+        };
+
+        commissionData.forEach(item => {
+            if (item._id === 'pending') {
+                commissions.pending = item.total;
+            } else if (item._id === 'paid') {
+                commissions.paid = item.total;
+            }
+            commissions.total += item.total;
+            commissions.count += item.count;
+        });
+
+        // Agrupar serviços por dia para visualização em gráfico
+        const dailyServices = services.reduce((acc, service) => {
+            const dateStr = service.date.toISOString().split('T')[0];
+            if (!acc[dateStr]) {
+                acc[dateStr] = {
+                    date: dateStr,
+                    count: 0,
+                    total: 0
+                };
+            }
+            acc[dateStr].count += 1;
+            acc[dateStr].total += service.amount;
+            return acc;
+        }, {});
+
+        res.json({
+            status: 'success',
+            data: {
+                professional: {
+                    id: professional._id,
+                    name: professional.name,
+                    commissionType: professional.commissionType,
+                    commissionValue: professional.commissionValue
+                },
+                services,
+                commissions,
+                dailyServices: Object.values(dailyServices),
+                dateFilter: {
+                    type: filterType || 'custom',
+                    startDate: start,
+                    endDate: end
+                }
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+// Obter dados para o painel do profissional
+const getProfessionalDashboard = async (req, res) => {
+    try {
+        // Verificar se é um profissional
+        if (req.user.role !== 'professional') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Esta função está disponível apenas para profissionais'
+            });
+        }
+
+        const professional = await Professional.findOne({ userAccountId: req.user._id });
+        if (!professional) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Perfil profissional não encontrado'
+            });
+        }
+
+        const ownerId = professional.userId;
+        const professionalId = professional._id;
+
+        // Dados dos últimos 30 dias
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const today = new Date();
+
+        // Agendamentos pendentes
+        const pendingAppointments = await Appointment.countDocuments({
+            userId: ownerId,
+            professionalId: professionalId,
+            status: { $in: ['scheduled', 'confirmed'] },
+            date: { $gte: new Date() }
+        });
+
+        // Serviços realizados no mês atual
+        const currentMonthStart = new Date();
+        currentMonthStart.setDate(1);
+        currentMonthStart.setHours(0, 0, 0, 0);
+
+        const servicesThisMonth = await Transaction.countDocuments({
+            userId: ownerId,
+            professional: professionalId,
+            type: 'income',
+            category: 'service',
+            date: { $gte: currentMonthStart, $lte: today }
+        });
+
+        // Comissões pendentes e totais
+        const commissionData = await Transaction.aggregate([
+            {
+                $match: {
+                    userId: ownerId,
+                    professional: professionalId,
+                    'commission.amount': { $gt: 0 }
+                }
+            },
+            {
+                $group: {
+                    _id: '$commission.status',
+                    total: { $sum: '$commission.amount' },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Processar dados de comissão
+        const commissions = {
+            pending: 0,
+            paid: 0,
+            total: 0,
+            count: 0
+        };
+
+        commissionData.forEach(item => {
+            if (item._id === 'pending') {
+                commissions.pending = item.total;
+            } else if (item._id === 'paid') {
+                commissions.paid = item.total;
+            }
+            commissions.total += item.total;
+            commissions.count += item.count;
+        });
+
+        // Top 5 clientes atendidos por este profissional
+        const topClients = await Transaction.aggregate([
+            {
+                $match: {
+                    userId: ownerId,
+                    professional: professionalId,
+                    type: 'income',
+                    client: { $ne: null },
+                    date: { $gte: thirtyDaysAgo }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'clients',
+                    localField: 'client',
+                    foreignField: '_id',
+                    as: 'clientInfo'
+                }
+            },
+            {
+                $unwind: {
+                    path: '$clientInfo',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $group: {
+                    _id: '$client',
+                    name: { $first: '$clientInfo.name' },
+                    totalServices: { $sum: 1 },
+                    lastService: { $max: '$date' }
+                }
+            },
+            { $sort: { totalServices: -1 } },
+            { $limit: 5 }
+        ]);
+
+        res.json({
+            status: 'success',
+            data: {
+                professional: {
+                    id: professional._id,
+                    name: professional.name
+                },
+                pendingAppointments,
+                servicesThisMonth,
+                commissions,
+                topClients
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
 module.exports = {
     getFinancialSummary,
     getProfessionalPerformance,
@@ -944,5 +1224,7 @@ module.exports = {
     getPaymentStatusReport,
     getDetailedTransactions,
     getClientHistory,
-    getDateRange // Exportar para testes
+    getProfessionalOwnData,      // Nova função para profissionais visualizarem seus próprios dados
+    getProfessionalDashboard,    // Nova função para o painel do profissional
+    getDateRange                 // Exportar para testes
 };

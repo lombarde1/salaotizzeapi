@@ -3,6 +3,7 @@ const Professional = require('../models/professional');
 const Service = require('../models/service');
 const Client = require('../models/client');
 const notificationService = require('../services/notification');
+const {  getProfessionalId, canViewAllData } = require('../utils/userHelper');
 
 const getDayName = (dayIndex) => {
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -533,26 +534,16 @@ exports.getAppointments = async (req, res) => {
       if (!ownerUserId) {
         // Se não foi definido no middleware, calculamos
         if (req.user.role === 'professional') {
-          // Se o usuário é um profissional, precisa ter um parentId ou um registro Professional
-          if (req.user.parentId) {
-            ownerUserId = req.user.parentId;
-          } else {
-            const professional = await Professional.findOne({ userAccountId: req.user._id });
-            if (!professional) {
-              console.error(`getAppointments: Profissional não encontrado para usuário ${req.user._id}`);
-              return res.status(403).json({
-                status: 'error',
-                message: 'Perfil profissional não encontrado'
-              });
-            }
-            ownerUserId = professional.userId;
-          }
+          // Se o usuário é um profissional, precisa ter um parentId ou um registro Profession
+          console.log(`è professional`)
+          ownerUserId = await getOwnerUserId(req)
         } else {
           // Se não é profissional, usa o próprio ID
           ownerUserId = req.user._id;
         }
       }
       
+      console.log(ownerUserId)
       // Construir a query base com o userId do proprietário
       const query = { userId: ownerUserId };
       const { status, startDate, endDate, clientId, professionalId } = req.query;

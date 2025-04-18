@@ -145,6 +145,7 @@ exports.createTransaction = async (req, res) => {
 
 // Register a service transaction
 // Register a service transaction
+// No método registerService no seu arquivo transaction.js
 exports.registerService = async (req, res) => {
     try {
         console.log("Iniciando registerService com dados:", {
@@ -189,17 +190,15 @@ exports.registerService = async (req, res) => {
         const currentUserId = req.user.role === 'professional' ? req.user.parentId : req.user._id;
         console.log("ID do usuário atual (dono):", currentUserId);
         
-        // Verificar se o profissional é o dono
+        // CORREÇÃO: Verificar se o profissional é o próprio usuário logado
         // Um profissional é considerado como dono se:
         // 1. O ID do usuário logado é igual ao userAccountId do profissional
-        // OU
-        // 2. Não existe conta de usuário para o profissional (userAccountId é nulo)
-        //    e a requisição está sendo feita pelo dono que cadastrou o profissional
-        const isProfessionalOwner = 
-            (professional.userAccountId && professional.userAccountId.toString() === req.user._id.toString()) ||
-            (!professional.userAccountId && professional.userId.toString() === currentUserId.toString() && req.user._id.toString() === currentUserId.toString());
+        const isProfessionalUser = req.user.role === 'professional';
+        const isProfessionalOwner = professional.userAccountId && 
+                                   professional.userAccountId.toString() === req.user._id.toString();
         
-        console.log("O profissional é o dono?", isProfessionalOwner);
+        console.log("É usuário profissional?", isProfessionalUser);
+        console.log("O profissional é o próprio usuário?", isProfessionalOwner);
 
         // Criar transação principal
         const transaction = new Transaction({
@@ -222,39 +221,29 @@ exports.registerService = async (req, res) => {
             }
         });
 
-        // Calcular comissão baseada apenas no profissional
+        // MODIFICAÇÃO: Calcular comissão mesmo quando o profissional é o próprio usuário
         let commissionAmount = 0;
         
-        // Calcular comissão apenas se o profissional não for o proprietário
-        if (!isProfessionalOwner) {
-            console.log('Profissional não é o proprietário, calculando comissão...');
+        // Calcular comissão para todos os casos, incluindo quando o profissional é o próprio usuário
+        if (professional.commissionType && professional.commissionValue !== undefined) {
+            console.log(`Usando config: type=${professional.commissionType}, value=${professional.commissionValue}`);
             
-            if (professional.commissionType && professional.commissionValue !== undefined) {
-                console.log(`Usando config: type=${professional.commissionType}, value=${professional.commissionValue}`);
-                
-                if (professional.commissionType === 'percentage') {
-                    commissionAmount = (professional.commissionValue / 100) * amount;
-                    console.log(`Cálculo percentual: (${professional.commissionValue}/100) * ${amount} = ${commissionAmount}`);
-                } else if (professional.commissionType === 'fixed') {
-                    commissionAmount = professional.commissionValue;
-                    console.log(`Valor fixo: ${commissionAmount}`);
-                }
-                
-                // Adicionar valor da comissão à transação
-                transaction.commission.amount = commissionAmount;
-                console.log("Comissão adicionada à transação:", commissionAmount);
-            } else {
-                console.log("Profissional não tem configuração de comissão válida");
+            if (professional.commissionType === 'percentage') {
+                commissionAmount = (professional.commissionValue / 100) * amount;
+                console.log(`Cálculo percentual: (${professional.commissionValue}/100) * ${amount} = ${commissionAmount}`);
+            } else if (professional.commissionType === 'fixed') {
+                commissionAmount = professional.commissionValue;
+                console.log(`Valor fixo: ${commissionAmount}`);
             }
+            
+            // Adicionar valor da comissão à transação
+            transaction.commission.type = professional.commissionType;
+            transaction.commission.value = professional.commissionValue;
+            transaction.commission.amount = commissionAmount;
+            console.log("Comissão adicionada à transação:", commissionAmount);
         } else {
-            console.log("Comissão não calculada: profissional é o proprietário");
+            console.log("Profissional não tem configuração de comissão válida");
         }
-
-        console.log("Transação antes de salvar:", {
-            id: transaction._id,
-            amount: transaction.amount,
-            commission: transaction.commission
-        });
         
         await transaction.save();
         
@@ -264,8 +253,8 @@ exports.registerService = async (req, res) => {
             commission: transaction.commission
         });
 
-        // Criar notificação de comissão para o profissional
-        if (commissionAmount > 0 && professional.userAccountId) {
+        // Criar notificação de comissão para o profissional (apenas se não for o próprio usuário logado)
+        if (commissionAmount > 0 && professional.userAccountId && !isProfessionalOwner) {
             console.log("Criando notificação para o profissional", professional.userAccountId);
             await notificationService.createNotification({
                 userId: professional.userAccountId,
@@ -280,7 +269,8 @@ exports.registerService = async (req, res) => {
         } else {
             console.log("Não criando notificação:", {
                 commissionAmount,
-                hasUserAccount: !!professional.userAccountId
+                hasUserAccount: !!professional.userAccountId,
+                isProfessionalOwner
             });
         }
 

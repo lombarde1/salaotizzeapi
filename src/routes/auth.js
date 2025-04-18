@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/user');
 const auth = require('../middleware/auth');
+const Professional = require('../models/professional');
 
 const router = express.Router();
 
@@ -90,9 +91,36 @@ router.post('/login', [
 // Get current user
 router.get('/me', auth, async (req, res) => {
     try {
+        let userData = { ...req.user.toObject() };
+        
+        // Se for um profissional, buscar informações adicionais de permissões
+        if (req.user.role === 'professional') {
+            const professional = await Professional.findOne({ userAccountId: req.user._id });
+            
+            if (professional) {
+                // Adicionar informações de permissões ao objeto de resposta
+                userData.permissions = {
+                    visualizarDados: professional.permissions?.visualizarDados || false
+                };
+                
+                // Adicionar informações adicionais do profissional que podem ser úteis
+                userData.professionalInfo = {
+                    id: professional._id,
+                    role: professional.role,
+                    commissionType: professional.commissionType,
+                    commissionValue: professional.commissionValue
+                };
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'admin') {
+            // Proprietários e administradores têm todas as permissões por padrão
+            userData.permissions = {
+                visualizarDados: true
+            };
+        }
+        
         res.json({
             status: 'success',
-            data: { user: req.user }
+            data: { user: userData }
         });
     } catch (error) {
         res.status(400).json({
