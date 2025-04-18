@@ -1,5 +1,6 @@
 const Product = require('../models/product');
 const { validationResult } = require('express-validator');
+const { getOwnerUserId } = require('../utils/userHelper');
 
 // Create new product
 exports.createProduct = async (req, res) => {
@@ -8,20 +9,24 @@ exports.createProduct = async (req, res) => {
         console.log('Usuário autenticado:', req.user._id);
         console.log('Payload recebido:', JSON.stringify(req.body));
 
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        console.log('ID do proprietário:', ownerUserId);
+
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             console.log('Erros de validação:', JSON.stringify(errors.array()));
             return res.status(400).json({ status: 'error', errors: errors.array() });
         }
 
-        // No início do método createProduct
-if (!req.body.barcode || req.body.barcode === '') {
-    req.body.barcode = undefined;
-}
+        // Tratar código de barras vazio
+        if (!req.body.barcode || req.body.barcode === '') {
+            req.body.barcode = undefined;
+        }
 
         // Verificar se já existe um produto com esse nome para esse usuário
         const existingProduct = await Product.findOne({
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id,
+            userId: ownerUserId,
             name: req.body.name
         });
         
@@ -42,7 +47,7 @@ if (!req.body.barcode || req.body.barcode === '') {
 
         const product = new Product({
             ...req.body,
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id
+            userId: ownerUserId // Salva sempre na conta do proprietário
         });
 
         console.log('Produto a ser salvo:', JSON.stringify({
@@ -90,8 +95,11 @@ if (!req.body.barcode || req.body.barcode === '') {
 // List products with filters and pagination
 exports.getProducts = async (req, res) => {
     try {
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
         const { category, brand, status, sortBy, order, page = 1, limit = 10 } = req.query;
-        const query = { userId: req.user.role === 'professional' ? req.user.parentId : req.user._id };
+        const query = { userId: ownerUserId };
         const sort = {};
 
         if (category) query.category = category;
@@ -116,6 +124,7 @@ exports.getProducts = async (req, res) => {
             }
         });
     } catch (error) {
+        console.error('Erro ao listar produtos:', error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -126,12 +135,16 @@ exports.getProducts = async (req, res) => {
 // Get all unique product categories
 exports.getCategories = async (req, res) => {
     try {
-        const categories = await Product.distinct('category', { userId: req.user.role === 'professional' ? req.user.parentId : req.user._id });
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
+        const categories = await Product.distinct('category', { userId: ownerUserId });
         res.status(200).json({
             status: 'success',
             data: { categories: categories.filter(category => category) }
         });
     } catch (error) {
+        console.error('Erro ao buscar categorias:', error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -142,12 +155,16 @@ exports.getCategories = async (req, res) => {
 // Get all unique product brands
 exports.getBrands = async (req, res) => {
     try {
-        const brands = await Product.distinct('brand', { userId: req.user.role === 'professional' ? req.user.parentId : req.user._id });
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
+        const brands = await Product.distinct('brand', { userId: ownerUserId });
         res.status(200).json({
             status: 'success',
             data: { brands: brands.filter(brand => brand) }
         });
     } catch (error) {
+        console.error('Erro ao buscar marcas:', error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -158,9 +175,12 @@ exports.getBrands = async (req, res) => {
 // Get product by ID
 exports.getProduct = async (req, res) => {
     try {
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
         const product = await Product.findOne({
             _id: req.params.id,
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id
+            userId: ownerUserId
         });
 
         if (!product) {
@@ -175,6 +195,7 @@ exports.getProduct = async (req, res) => {
             data: { product }
         });
     } catch (error) {
+        console.error('Erro ao buscar produto:', error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -185,6 +206,9 @@ exports.getProduct = async (req, res) => {
 // Update product
 exports.updateProduct = async (req, res) => {
     try {
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
         const updates = Object.keys(req.body);
         const allowedUpdates = ['name', 'description', 'purchasePrice', 'salePrice', 
                                'minStock', 'brand', 'category', 'barcode',
@@ -200,7 +224,7 @@ exports.updateProduct = async (req, res) => {
 
         const product = await Product.findOne({
             _id: req.params.id,
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id
+            userId: ownerUserId
         });
 
         if (!product) {
@@ -218,6 +242,7 @@ exports.updateProduct = async (req, res) => {
             data: { product }
         });
     } catch (error) {
+        console.error('Erro ao atualizar produto:', error);
         if (error.code === 11000) {
             return res.status(400).json({
                 status: 'error',
@@ -234,6 +259,9 @@ exports.updateProduct = async (req, res) => {
 // Update product stock
 exports.updateStock = async (req, res) => {
     try {
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
         const { quantity, type, reason } = req.body;
 
         if (!['in', 'out'].includes(type)) {
@@ -245,7 +273,7 @@ exports.updateStock = async (req, res) => {
 
         const product = await Product.findOne({
             _id: req.params.id,
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id
+            userId: ownerUserId
         });
 
         if (!product) {
@@ -262,6 +290,7 @@ exports.updateStock = async (req, res) => {
             data: { product }
         });
     } catch (error) {
+        console.error('Erro ao atualizar estoque:', error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -272,9 +301,12 @@ exports.updateStock = async (req, res) => {
 // Delete (deactivate) product
 exports.deleteProduct = async (req, res) => {
     try {
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
         const product = await Product.findOne({
             _id: req.params.id,
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id
+            userId: ownerUserId
         });
 
         if (!product) {
@@ -292,6 +324,7 @@ exports.deleteProduct = async (req, res) => {
             message: 'Produto desativado com sucesso'
         });
     } catch (error) {
+        console.error('Erro ao desativar produto:', error);
         res.status(400).json({
             status: 'error',
             message: error.message
@@ -302,8 +335,11 @@ exports.deleteProduct = async (req, res) => {
 // Get low stock products
 exports.getLowStockProducts = async (req, res) => {
     try {
+        // Obter o ID do usuário proprietário
+        const ownerUserId = await getOwnerUserId(req);
+        
         const products = await Product.find({
-            userId: req.user.role === 'professional' ? req.user.parentId : req.user._id,
+            userId: ownerUserId,
             status: 'active',
             $expr: { $lte: ['$stock', '$minStock'] }
         });
@@ -313,6 +349,7 @@ exports.getLowStockProducts = async (req, res) => {
             data: { products }
         });
     } catch (error) {
+        console.error('Erro ao buscar produtos com estoque baixo:', error);
         res.status(400).json({
             status: 'error',
             message: error.message

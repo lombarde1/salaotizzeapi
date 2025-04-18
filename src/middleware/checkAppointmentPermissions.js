@@ -1,61 +1,55 @@
+// Middleware simplificado para verificar permissões de agendamento
 const Professional = require('../models/professional');
 const User = require('../models/user');
 
 const checkAppointmentPermissions = async (req, res, next) => {
     try {
-        // Get the authenticated user
-        const user = await User.findById(req.user._id);
+      // Se o usuário for admin ou owner, permite acesso total
+      if (req.user.role === 'owner' || req.user.role === 'admin') {
+        return next();
+      }
+  
+      console.log(req.user)
+      // Se o usuário for um profissional, verifica se tem permissão para visualizar
+      if (req.user.role === 'professional') {
+        const professional = await Professional.findOne({ userAccountId: req.user._id });
         
-        // If user is an owner or admin, allow full access
-        if (user.role === 'owner' || user.role === 'admin') {
-            return next();
-        }
-
-        // If user is a professional, check their permissions
-        if (user.role === 'professional') {
-            const professional = await Professional.findOne({ userAccountId: user._id });
-            
-            if (!professional) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: 'Professional profile not found'
-                });
-            }
-
-            // Check if professional has schedule management permission
-            if (!professional.permissions.manageSchedule) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: 'You do not have permission to manage appointments'
-                });
-            }
-
-            // For GET requests, filter by professional ID if viewing own data only
-            if (req.method === 'GET' && professional.permissions.viewOwnDataOnly) {
-                req.query.professionalId = professional._id;
-            }
-
-            // For POST/PUT requests, ensure professional can only create/update their own appointments
-            if (['POST', 'PUT'].includes(req.method)) {
-                if (professional.permissions.viewOwnDataOnly && 
-                    req.body.professionalId && 
-                    req.body.professionalId.toString() !== professional._id.toString()) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'You can only manage your own appointments'
-                    });
-                }
-            }
-        }
-
-        next();
-    } catch (error) {
-        res.status(500).json({
+        if (!professional) {
+          return res.status(403).json({
             status: 'error',
-            message: 'Error checking appointment permissions',
-            error: error.message
-        });
+            message: 'Perfil de profissional não encontrado'
+          });
+        }
+  
+        // Verifica se o profissional tem permissão para visualizar dados
+        if (!professional.permissions.visualizarDados) {
+          // Se o profissional não pode visualizar os dados, só poderá ver/editar seus próprios agendamentos
+          if (req.method === 'GET') {
+            // Na hora de listar, já será filtrado no controller
+            // Não precisa fazer nada aqui
+          } else if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+            // Para operações de escrita, verifica se o profissional está tentando modificar seus próprios agendamentos
+            if (req.body.professionalId && req.body.professionalId.toString() !== professional._id.toString()) {
+              return res.status(403).json({
+                status: 'error',
+                message: 'Você só pode gerenciar seus próprios agendamentos'
+              });
+            }
+          }
+        }
+        
+        // Se chegou até aqui, o profissional tem permissão
+        req.professionalId = professional._id; // Guarda o ID do profissional para o controller
+      }
+  
+      next();
+    } catch (error) {
+      res.status(500).json({
+        status: 'error',
+        message: 'Erro ao verificar permissões',
+        error: error.message
+      });
     }
-};
-
-module.exports = checkAppointmentPermissions;
+  };
+  
+  module.exports = checkAppointmentPermissions;

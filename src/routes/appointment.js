@@ -40,30 +40,31 @@ const validateAvailabilityQuery = [
 router.post('/', auth, checkAppointmentPermissions, validateAppointment, async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({
-            status: 'error',
-            errors: errors.array()
-        });
+      return res.status(400).json({
+        status: 'error',
+        errors: errors.array()
+      });
     }
     await appointmentController.createAppointment(req, res);
-});
+  });
 
 // Get appointments with filters
 router.get('/', auth, checkAppointmentPermissions, async (req, res) => {
     await appointmentController.getAppointments(req, res);
-});
+  });
+  
 
 // Update appointment
 router.put('/:id', auth, checkAppointmentPermissions, validateAppointment, async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({
-            status: 'error',
-            errors: errors.array()
-        });
+      return res.status(400).json({
+        status: 'error',
+        errors: errors.array()
+      });
     }
     await appointmentController.updateAppointment(req, res);
-});
+  });
 
 // Update appointment status
 router.put('/:id/status', auth, checkAppointmentPermissions, validateStatus, async (req, res) => {

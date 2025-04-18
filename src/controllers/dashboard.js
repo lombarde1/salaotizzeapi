@@ -5,6 +5,7 @@ const Client = require('../models/client');
 const Appointment = require('../models/appointment');
 const Service = require('../models/service');
 const Professional = require('../models/professional');
+const { getOwnerUserId, getProfessionalId, canViewAllData } = require('../utils/userHelper');
 
 // Helper function to get date range based on filter type
 const getDateRange = (filterType, customStartDate, customEndDate) => {
@@ -62,44 +63,46 @@ const getDateRange = (filterType, customStartDate, customEndDate) => {
 const getDashboardSummary = async (req, res) => {
   try {
     const { filterType = 'este_ano', startDate, endDate } = req.query;
-    let userId = req.user._id;
+
+    // Obter o ID do proprietário usando a função de utilidade
+    const ownerUserId = await getOwnerUserId(req);
 
     // Get date range based on filter type
     const { start, end } = getDateRange(filterType.toLowerCase(), startDate, endDate);
 
-    // If user is a professional, get their parent account's userId
-    let professional = null;
+    // Verificar se é um profissional e checar suas permissões
     if (req.user.role === 'professional') {
-      professional = await Professional.findOne({ userAccountId: userId });
-      if (professional) {
-        userId = professional.userId; // This is the owner's/company's userId
-      } else {
-        return res.status(403).json({
-          status: 'error',
-          message: 'Professional not found'
-        });
-      }
-    }
-
-    // Check if user is a professional and get their permissions
-    let professionalPermissions = null;
-    if (req.user.role === 'professional') {
-      const professional = await Professional.findOne({ userAccountId: userId });
+      const professional = await Professional.findOne({ userAccountId: req.user._id });
+      
       if (!professional) {
         return res.status(403).json({
           status: 'error',
-          message: 'Professional not found'
+          message: 'Profissional não encontrado'
         });
       }
-      professionalPermissions = professional.permissions;
-
-      // If professional doesn't have dashboard access, only show their commission data
-      if (!professionalPermissions.viewFullDashboard) {
+      
+      // Verificar se o profissional pode visualizar dados
+      // Na versão simplificada, usamos a propriedade visualizarDados
+      const canView = professional.permissions && professional.permissions.visualizarDados;
+      
+      // Se não tiver permissão, mostrar apenas seus dados pessoais
+      if (!canView) {
+        const professionalId = professional._id;
+        
+        // Buscar total de agendamentos pendentes do profissional
+        const appointmentsCount = await Appointment.countDocuments({
+          userId: ownerUserId,
+          professionalId,
+          status: { $in: ['scheduled', 'confirmed'] },
+          date: { $gte: new Date() }
+        });
+        
+        // Buscar dados de comissão do profissional
         const commissionData = await Transaction.aggregate([
           {
             $match: {
-              userId: professional.userId,
-              'professional': professional._id,
+              userId: ownerUserId,
+              professional: professionalId,
               date: { $gte: start, $lte: end }
             }
           },
@@ -121,13 +124,6 @@ const getDashboardSummary = async (req, res) => {
           }
         ]);
 
-        const appointmentsCount = await Appointment.countDocuments({
-          userId: professional.userId,
-          professionalId: professional._id,
-          status: { $in: ['scheduled', 'confirmed'] },
-          date: { $gte: new Date() }
-        });
-
         return res.json({
           status: 'success',
           data: {
@@ -145,11 +141,11 @@ const getDashboardSummary = async (req, res) => {
       }
     }
 
-    // Get revenue
+    // Buscar receitas no período
     const income = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: ownerUserId,
           type: 'income',
           date: { $gte: start, $lte: end }
         }
@@ -162,11 +158,11 @@ const getDashboardSummary = async (req, res) => {
       }
     ]);
 
-    // Get expenses
+    // Buscar despesas no período
     const expenses = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: ownerUserId,
           type: 'expense',
           date: { $gte: start, $lte: end }
         }
@@ -179,23 +175,23 @@ const getDashboardSummary = async (req, res) => {
       }
     ]);
 
-    // Count active clients
+    // Contagem de clientes ativos
     const clientsCount = await Client.countDocuments({
-      userId,
+      userId: ownerUserId,
       status: 'active'
     });
 
-    // Count services performed
+    // Contagem de serviços realizados no período
     const servicesCount = await Transaction.countDocuments({
-      userId,
+      userId: ownerUserId,
       type: 'income',
       category: 'service',
       date: { $gte: start, $lte: end }
     });
 
-    // Get pending appointments
+    // Contagem de agendamentos pendentes
     const pendingAppointments = await Appointment.countDocuments({
-      userId,
+      userId: ownerUserId,
       status: { $in: ['scheduled', 'confirmed'] },
       date: { $gte: new Date() }
     });
@@ -220,6 +216,7 @@ const getDashboardSummary = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Erro no dashboard summary:', error);
     res.status(500).json({
       status: 'error',
       message: error.message
@@ -227,31 +224,34 @@ const getDashboardSummary = async (req, res) => {
   }
 };
 
-// Get daily chart data - Fixed version
+// Get daily chart data
 const getDailyChartData = async (req, res) => {
   try {
     const { filterType = 'este_mes', startDate, endDate } = req.query;
-    let userId = req.user._id;
+    
+    // Obter o ID do proprietário usando a função de utilidade
+    const ownerUserId = await getOwnerUserId(req);
 
     // Get date range based on filter type
     const { start, end } = getDateRange(filterType.toLowerCase(), startDate, endDate);
 
     // Check professional permissions
     if (req.user.role === 'professional') {
-      const professional = await Professional.findOne({ userAccountId: userId });
-      if (!professional || !professional.permissions.viewFullDashboard) {
+      // Na versão simplificada, verificamos se o profissional pode visualizar dados
+      const canView = await canViewAllData(req);
+      
+      if (!canView) {
         return res.status(403).json({
           status: 'error',
-          message: 'Access denied. Insufficient permissions.'
+          message: 'Acesso negado. Permissões insuficientes.'
         });
       }
-      userId = professional.userId;
     }
 
     const dailyData = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: ownerUserId,
           date: { $gte: start, $lte: end }
         }
       },
@@ -294,6 +294,7 @@ const getDailyChartData = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Erro no gráfico diário:', error);
     res.status(500).json({
       status: 'error',
       message: error.message
@@ -305,24 +306,21 @@ const getDailyChartData = async (req, res) => {
 const getMonthlyChartData = async (req, res) => {
   try {
     const { filterType = 'este_ano', year } = req.query;
-    let userId = req.user._id;
     
-    // If user is a professional, get their parent account's userId
+    // Obter o ID do proprietário usando a função de utilidade
+    const ownerUserId = await getOwnerUserId(req);
+    
+    // Check professional permissions
     if (req.user.role === 'professional') {
-      const professional = await Professional.findOne({ userAccountId: userId });
-      if (!professional) {
+      // Na versão simplificada, verificamos se o profissional pode visualizar dados
+      const canView = await canViewAllData(req);
+      
+      if (!canView) {
         return res.status(403).json({
           status: 'error',
-          message: 'Professional not found'
+          message: 'Acesso negado. Permissões insuficientes.'
         });
       }
-      if (!professional.permissions.viewFullDashboard) {
-        return res.status(403).json({
-          status: 'error',
-          message: 'Access denied. Insufficient permissions.'
-        });
-      }
-      userId = professional.userId; // This is the owner's/company's userId
     }
 
     // Default to current year, but allow specific year if provided
@@ -334,7 +332,7 @@ const getMonthlyChartData = async (req, res) => {
     const monthlyData = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: ownerUserId,
           date: { $gte: startDate, $lte: endDate }
         }
       },
@@ -378,6 +376,7 @@ const getMonthlyChartData = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Erro no gráfico mensal:', error);
     res.status(500).json({
       status: 'error',
       message: error.message
